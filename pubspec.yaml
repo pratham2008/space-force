@@ -38,6 +38,10 @@ dependencies:
   flame_audio: ^2.10.6
   shared_preferences: ^2.5.3
 
+  firebase_core: ^4.4.0
+  firebase_auth: ^6.1.4
+  cloud_firestore: ^6.1.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

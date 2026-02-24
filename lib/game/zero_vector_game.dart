@@ -5,7 +5,9 @@ import 'camera/camera_effects.dart';
 import 'components/player.dart';
 import 'components/enemy.dart';
 import 'components/starfield.dart';
+import 'package:flame/components.dart';
 import 'components/wave_transition.dart';
+import 'effects/warp_ring_component.dart';
 import 'managers/enemy_spawn_manager.dart';
 import 'overlays/start_menu_overlay.dart';
 
@@ -14,9 +16,12 @@ enum GameState { menu, waveTransition, playing, paused, gameOver }
 
 // ── Overlay keys (single source of truth) ──────────────────────────────────
 class Overlays {
-  static const String hud = 'Hud';
-  static const String gameOver = 'GameOver';
-  static const String startMenu = StartMenuOverlay.id;
+  static const String hud            = 'Hud';
+  static const String gameOver       = 'GameOver';
+  static const String startMenu      = StartMenuOverlay.id;
+  static const String createUsername = 'CreateUsername';
+  static const String leaderboard    = 'Leaderboard';
+  static const String pauseMenu      = 'PauseMenu';
 }
 
 // ── Damage constants ────────────────────────────────────────────────────────
@@ -29,7 +34,6 @@ class ZeroVectorGame extends FlameGame with HasCollisionDetection {
   // ── Score ───────────────────────────────────────────────────────────────────
   int _score = 0;
   int get score => _score;
-  int highScore = 12500; // Placeholder for high score
 
   // ── Player HP ───────────────────────────────────────────────────────────────
   int playerMaxHp = 100;
@@ -237,8 +241,11 @@ class ZeroVectorGame extends FlameGame with HasCollisionDetection {
     overlays.add(Overlays.gameOver);
   }
 
-  // ── Restart ─────────────────────────────────────────────────────────────────
-  void restart() {
+  // ── Reset/Cleanup Logic ───────────────────────────────────────────────────
+
+  /// Centralized internal state reset. 
+  /// Does NOT modify overlays; strictly updates internal properties and entities.
+  void resetGame() {
     _score = 0;
     lives = 3;
     wave = 1;
@@ -250,16 +257,64 @@ class ZeroVectorGame extends FlameGame with HasCollisionDetection {
 
     clearEnemies();
     children.whereType<WaveTransitionComponent>().forEach((c) => c.removeFromParent());
+    children.whereType<ParticleSystemComponent>().forEach((c) => c.removeFromParent());
+    children.whereType<WarpRingComponent>().forEach((c) => c.removeFromParent());
     player?.removeFromParent();
     _spawnManager?.removeFromParent();
 
     _initGame();
+  }
 
+  /// Full engine cleanup before returning to the start menu.
+  void mainMenuCleanup() {
+    audioManager.switchBgm(BgmType.menu);
+    clearEnemies();
+    _spawnManager?.removeFromParent();
+    _spawnManager = null;
+    player?.removeFromParent();
+    children.whereType<WaveTransitionComponent>().forEach((c) => c.removeFromParent());
+    children.whereType<ParticleSystemComponent>().forEach((c) => c.removeFromParent());
+    children.whereType<WarpRingComponent>().forEach((c) => c.removeFromParent());
+    
+    _score = 0;
+    state = GameState.menu;
+    
+    resumeEngine(); // Ensure engine isn't stuck if we were paused
+    
+    // UI clean up happens in the overlay itself or callers, 
+    // but we ensure the core state is ready for Start Screen.
+    overlays.clear();
+    overlays.add(Overlays.startMenu);
+  }
+
+  // ── Restart ─────────────────────────────────────────────────────────────────
+  void restart() {
+    resetGame();
     resumeEngine();
+    
     // Switch to game BGM (same as startGame behaviour)
     audioManager.switchBgm(BgmType.game);
-    overlays.remove(Overlays.gameOver);
-    overlays.remove(Overlays.startMenu);
+    
+    overlays.clear();
+    overlays.add(Overlays.hud);
+  }
+
+  // ── Pause/Resume Helpers ────────────────────────────────────────────────────
+
+  void pauseGame() {
+    if (state != GameState.playing) return;
+    state = GameState.paused;
+    pauseEngine();
+    audioManager.pauseBgm();
+    overlays.add(Overlays.pauseMenu);
+  }
+
+  void resumeGame() {
+    if (state != GameState.paused) return;
+    state = GameState.playing;
+    resumeEngine();
+    audioManager.resumeBgm();
+    overlays.remove(Overlays.pauseMenu);
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────

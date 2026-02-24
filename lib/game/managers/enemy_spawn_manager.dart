@@ -81,6 +81,7 @@ class EnemySpawnManager extends Component
         hp: _calculateEnemyHp(),
         hoverYFraction: _calculateHoverY(),
         startAggressive: aggressive,
+        wave: game.wave,
       ),
     );
   }

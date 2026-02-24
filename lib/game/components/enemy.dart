@@ -4,71 +4,84 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../zero_vector_game.dart';
 import '../effects/particle_effects.dart';
+import '../effects/warp_ring_component.dart';
 import 'player.dart';
 
 class Enemy extends PositionComponent
     with HasGameReference<ZeroVectorGame>, CollisionCallbacks {
-  static const double _size = 40.0;
 
-  // ── Base stats ───────────────────────────────────────────────────────────────
+  // ── Base stats ────────────────────────────────────────────────────────────
   final double baseSpeed;
   final int scoreValue;
   int hp;
 
-  // ── Hover config ─────────────────────────────────────────────────────────────
-  // The Y fraction ceiling the enemy descends to before hovering.
-  // e.g. 0.35 means it stops at 35% from the top of the screen.
-  final double hoverYFraction; // max Y = game.size.y * hoverYFraction
-  static const double _hoverMinFraction = 0.10; // min Y = 10% from top
+  // ── Hover config ──────────────────────────────────────────────────────────
+  final double hoverYFraction;
+  static const double _hoverMinFraction = 0.10;
 
-  // ── Movement state ───────────────────────────────────────────────────────────
+  // ── Movement state ────────────────────────────────────────────────────────
   double _currentSpeed;
   bool _aggressiveMode = false;
-  bool _hovering = false;      // true once the enemy reaches its hover band
-  double _hoverTargetY = 0;    // assigned on first hover entry
+  bool _hovering = false;
+  double _hoverTargetY = 0;
   double _oscillationPhase = 0;
-  static const double _oscillationAmplitude = 30.0; // pixels
-  static const double _oscillationSpeed = 1.8;      // radians / second
+  static const double _oscillationAmplitude = 30.0;
+  static const double _oscillationSpeed     = 1.8;
 
-  // ── Fire system ──────────────────────────────────────────────────────────────
+  // ── Rotation oscillation ─────────────────────────────────────────────────
+  double _rotationPhase = 0;
+  static const double _rotationSpeed = 0.9;
+  static const double _maxRotation   = 0.12; // ±~7°
+
+  // ── Fire ──────────────────────────────────────────────────────────────────
   double _fireTimer = 0;
   late double _fireInterval;
   final Random _random = Random();
 
-  // When true the enemy skips hover and starts directly in aggressive mode.
   final bool startAggressive;
+
+  // ── Wave-scaled size ──────────────────────────────────────────────────────
+  // Size is set in the constructor based on wave; hitbox is updated in onLoad.
+  final int wave;
 
   Enemy({
     required Vector2 position,
-    this.baseSpeed = 120.0,
-    this.scoreValue = 10,
+    this.baseSpeed    = 120.0,
+    this.scoreValue   = 10,
     required this.hp,
     required this.hoverYFraction,
     this.startAggressive = false,
+    this.wave = 1,
   })  : _currentSpeed = baseSpeed,
         super(
           position: position,
-          size: Vector2.all(_size),
+          // Size grows with wave, clamped 40–70 px
+          size: Vector2.all((38.0 + wave * 3.0).clamp(40.0, 70.0)),
           anchor: Anchor.center,
         );
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-    add(RectangleHitbox());
+
+    // Hitbox matches current (wave-scaled) size
+    add(RectangleHitbox(size: size.clone()));
+
     _fireInterval = _calculateFireInterval();
-    _fireTimer = _random.nextDouble() * _fireInterval;
+    _fireTimer    = _random.nextDouble() * _fireInterval;
+    _rotationPhase = _random.nextDouble() * 2 * pi;
+
+    // Warp-in effect
+    game.add(WarpRingComponent(
+      position: position.clone(),
+      color: const Color(0xFFFF1744),
+    ));
 
     if (startAggressive) {
-      // Skip hover entirely — go straight to aggressive chase mode.
-      _aggressiveMode = true;
-      _currentSpeed = baseSpeed * 1.4;
+      _aggressiveMode  = true;
+      _currentSpeed    = baseSpeed * 1.4;
     } else {
-      // Randomise initial X oscillation phase so enemies don't move in sync
       _oscillationPhase = _random.nextDouble() * 2 * pi;
-
-      // Pick a random hover Y within the allowed band:
-      //   [screenH * _hoverMinFraction, screenH * hoverYFraction]
       final minY = game.size.y * _hoverMinFraction;
       final maxY = game.size.y * hoverYFraction;
       _hoverTargetY = minY + _random.nextDouble() * (maxY - minY);
@@ -79,90 +92,84 @@ class Enemy extends PositionComponent
   void update(double dt) {
     super.update(dt);
 
+    _rotationPhase += _rotationSpeed * dt;
+    angle = sin(_rotationPhase) * _maxRotation;
+
     if (_aggressiveMode) {
       _updateAggressive(dt);
     } else {
       _updateHover(dt);
     }
 
-    // Hard ceiling: never cross into player zone (>= 60% of screen)
     final playerZoneCeiling = game.size.y * 0.60;
-    if (position.y > playerZoneCeiling) {
-      position.y = playerZoneCeiling;
-    }
+    if (position.y > playerZoneCeiling) position.y = playerZoneCeiling;
 
-    // Off-screen bottom — only reachable in aggressive mode
-    if (position.y > game.size.y + _size) {
+    if (position.y > game.size.y + size.y) {
       removeFromParent();
       return;
     }
 
-    // ── Fire ─────────────────────────────────────────────────────────────────
     _fireTimer += dt;
     if (_fireTimer >= _fireInterval) {
-      _fireTimer = 0;
+      _fireTimer    = 0;
       _fireInterval = _calculateFireInterval();
       _fire();
     }
   }
 
-  // ── Normal hover movement ────────────────────────────────────────────────────
-
   void _updateHover(double dt) {
     if (!_hovering) {
-      // Descend toward hover target Y
       position.y += _currentSpeed * dt;
       if (position.y >= _hoverTargetY) {
         position.y = _hoverTargetY;
         _hovering = true;
       }
     } else {
-      // Gentle horizontal oscillation while hovering
       _oscillationPhase += _oscillationSpeed * dt;
       position.x += sin(_oscillationPhase) * _oscillationAmplitude * dt;
+      position.x = position.x.clamp(size.x / 2, game.size.x - size.x / 2);
 
-      // Clamp X within screen
-      position.x = position.x.clamp(_size / 2, game.size.x - _size / 2);
+      // Subtle vertical hover bob (±2.5 px)
+      position.y = _hoverTargetY + sin(_oscillationPhase * 1.3) * 2.5;
     }
   }
 
-  // ── Aggressive movement ──────────────────────────────────────────────────────
-
   void _updateAggressive(double dt) {
-    // Chase player X gradually
     final px = game.player?.position.x ?? position.x;
     final dx = (px - position.x).clamp(-_currentSpeed * dt, _currentSpeed * dt);
     position.x += dx;
-    // Full speed downward
     position.y += _currentSpeed * dt;
   }
-
-  // ── Activate aggressive mode ─────────────────────────────────────────────────
 
   void activateAggressiveMode() {
     if (_aggressiveMode) return;
     _aggressiveMode = true;
-    _hovering = false;
-    _currentSpeed = baseSpeed * 1.4;
+    _hovering       = false;
+    _currentSpeed   = baseSpeed * 1.4;
   }
 
-  // ── HP / Death ────────────────────────────────────────────────────────────────
+  // ── HP / Death ────────────────────────────────────────────────────────────
 
   void hit(int damage) {
     hp -= damage;
     if (hp <= 0) {
-      // Explosion particles on death
-      game.add(explosionParticles(position.clone()));
+      // Enforce particle cap
+      final pCount = game.children.whereType<ParticleSystemComponent>().length;
+      if (pCount < kMaxParticleSystems) {
+        game.add(explosionParticles(position.clone()));
+      }
       game.audioManager.playSfx('explosion.wav');
       game.onEnemyKilled(scoreValue);
       removeFromParent();
     } else {
-      // Spark particles on non-lethal hit
-      game.add(sparkParticles(position.clone()));
+      final pCount = game.children.whereType<ParticleSystemComponent>().length;
+      if (pCount < kMaxParticleSystems) {
+        game.add(sparkParticles(position.clone()));
+      }
     }
   }
 
-  // ── Collision with Player ─────────────────────────────────────────────────────
+  // ── Collision with Player ─────────────────────────────────────────────────
 
   @override
   void onCollisionStart(
@@ -177,7 +184,7 @@ class Enemy extends PositionComponent
     }
   }
 
-  // ── Fire logic ───────────────────────────────────────────────────────────────
+  // ── Fire ──────────────────────────────────────────────────────────────────
 
   double _calculateFireInterval() {
     final w = game.wave;
@@ -188,37 +195,84 @@ class Enemy extends PositionComponent
 
   void _fire() {
     game.add(
-      EnemyBullet(position: Vector2(position.x, position.y + _size / 2)),
+      EnemyBullet(position: Vector2(position.x, position.y + size.y / 2)),
     );
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
   @override
   void render(Canvas canvas) {
-    final paint = Paint()..color = const Color(0xFFE53935);
-    final path = Path()
-      ..moveTo(size.x / 2, 0)
-      ..lineTo(size.x, size.y / 2)
-      ..lineTo(size.x / 2, size.y)
-      ..lineTo(0, size.y / 2)
-      ..close();
-    canvas.drawPath(path, paint);
+    final cx = size.x / 2;
+    final cy = size.y / 2;
 
-    // HP bar — only shown when damaged
-    final maxHp = 2 + (game.wave * 0.6).floor();
+    // HP ratio (for damaged glow effect)
+    final maxHp  = 2 + (game.wave * 0.6).floor();
+    final hpRatio = (hp / maxHp).clamp(0.0, 1.0);
+
+    final coreColor = Color.lerp(
+      const Color(0xFFFF6D00), // orange (full hp)
+      const Color(0xFFFF1744), // red (low hp)
+      1.0 - hpRatio,
+    )!;
+
+    // ── Outer glow (BlendMode.plus) ───────────────────────────────────────
+    canvas.drawPath(
+      _buildShipPath(cx, cy),
+      Paint()
+        ..color = coreColor.withValues(alpha: 0.3)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 9.0
+        ..blendMode = BlendMode.plus,
+    );
+
+    // ── Body fill ─────────────────────────────────────────────────────────
+    canvas.drawPath(
+      _buildShipPath(cx, cy),
+      Paint()
+        ..color = coreColor.withValues(alpha: 0.9),
+    );
+
+    // ── Inner highlight ───────────────────────────────────────────────────
+    canvas.drawPath(
+      _buildShipPath(cx, cy),
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.25)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0,
+    );
+
+    // ── HP bar (only when damaged) ────────────────────────────────────────
     if (hp < maxHp) {
-      final barW = size.x;
-      final filled = (hp / maxHp).clamp(0.0, 1.0) * barW;
+      final barW  = size.x;
+      final filled = hpRatio * barW;
       canvas.drawRect(
-        Rect.fromLTWH(0, -6, barW, 4),
-        Paint()..color = const Color(0x66FF1744),
+        Rect.fromLTWH(0, -8, barW, 4),
+        Paint()..color = const Color(0x44FF1744),
       );
       canvas.drawRect(
-        Rect.fromLTWH(0, -6, filled, 4),
-        Paint()..color = const Color(0xFFFF1744),
+        Rect.fromLTWH(0, -8, filled, 4),
+        Paint()
+          ..color = const Color(0xFFFF1744)
+          ..blendMode = BlendMode.plus,
       );
     }
+  }
+
+  /// Alien craft: diamond with swept wings
+  Path _buildShipPath(double cx, double cy) {
+    return Path()
+      ..moveTo(cx,          0)          // top point (nose)
+      ..lineTo(cx + cx * 0.55, cy * 0.7) // right shoulder
+      ..lineTo(size.x,     cy)          // right wingtip
+      ..lineTo(cx + cx * 0.45, cy * 1.15) // right wing notch
+      ..lineTo(cx + cx * 0.3,  size.y) // right tail tip
+      ..lineTo(cx,          cy * 1.6)  // center rear notch
+      ..lineTo(cx - cx * 0.3,  size.y) // left tail tip
+      ..lineTo(cx - cx * 0.45, cy * 1.15) // left wing notch
+      ..lineTo(0,          cy)          // left wingtip
+      ..lineTo(cx - cx * 0.55, cy * 0.7) // left shoulder
+      ..close();
   }
 }
 
@@ -226,9 +280,9 @@ class Enemy extends PositionComponent
 
 class EnemyBullet extends PositionComponent
     with HasGameReference<ZeroVectorGame>, CollisionCallbacks {
-  static const double _speed = 250.0;
-  static const double _width = 5.0;
-  static const double _height = 12.0;
+  static const double _speed  = 260.0;
+  static const double _width  = 5.0;
+  static const double _height = 14.0;
 
   EnemyBullet({required Vector2 position})
       : super(
@@ -247,9 +301,7 @@ class EnemyBullet extends PositionComponent
   void update(double dt) {
     super.update(dt);
     position.y += _speed * dt;
-    if (position.y > game.size.y + _height) {
-      removeFromParent();
-    }
+    if (position.y > game.size.y + _height) removeFromParent();
   }
 
   @override
@@ -267,7 +319,22 @@ class EnemyBullet extends PositionComponent
 
   @override
   void render(Canvas canvas) {
-    final paint = Paint()..color = const Color(0xFFFF6D00);
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), paint);
+    // Glow pass
+    canvas.drawOval(
+      Rect.fromLTWH(-2, -2, size.x + 4, size.y + 4),
+      Paint()
+        ..color = const Color(0xFFFF6D00).withValues(alpha: 0.3)
+        ..blendMode = BlendMode.plus,
+    );
+    // Core pill
+    canvas.drawOval(
+      Rect.fromLTWH(0, 0, size.x, size.y),
+      Paint()..color = const Color(0xFFFF6D00),
+    );
+    // Hot centre
+    canvas.drawOval(
+      Rect.fromLTWH(1, 1, size.x - 2, size.y - 4),
+      Paint()..color = Colors.white.withValues(alpha: 0.6),
+    );
   }
 }

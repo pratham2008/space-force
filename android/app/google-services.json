@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "330236718350",
+    "project_id": "space-c7a98",
+    "storage_bucket": "space-c7a98.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:330236718350:android:74e2d1da5030f56fa6fb5f",
+        "android_client_info": {
+          "package_name": "com.example.zerovector"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDtjF0ZzVU3irEBjM3bcAtsV3X4H_nl85A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

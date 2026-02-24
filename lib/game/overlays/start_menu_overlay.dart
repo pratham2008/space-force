@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../audio/audio_manager.dart';
+import '../services/auth_service.dart';
+import '../services/leaderboard_service.dart';
 import '../zero_vector_game.dart';
 
 class StartMenuOverlay extends StatefulWidget {
@@ -18,6 +20,7 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
   late AnimationController _floatController;
   late AnimationController _entranceController;
   late AnimationController _shimmerController;
+  late AnimationController _scoreCounterController;
 
   late Animation<double> _pulseAnimation;
   late Animation<double> _floatAnimation;
@@ -25,15 +28,16 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
   late Animation<Offset> _playButtonSlide;
   late Animation<Offset> _leaderboardButtonSlide;
   late Animation<double> _shimmerAnimation;
+  late Animation<int> _scoreCounterAnimation;
 
-  // Initialise from persisted mute state
   bool _isSoundOn = !AudioManager.instance.isMuted;
+  bool _isLoadingScore = true;
+  String _scoreLabel = 'GLOBAL BEST';
 
   @override
   void initState() {
     super.initState();
 
-    // Pulse: 1.0 -> 1.04 over 1.8s
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1800),
@@ -42,7 +46,6 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    // Floating: 0.0 -> 5.0 drift
     _floatController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 3000),
@@ -51,7 +54,6 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
       CurvedAnimation(parent: _floatController, curve: Curves.easeInOut),
     );
 
-    // Shimmer: 0.0 -> 1.0
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 4),
@@ -60,7 +62,6 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
       CurvedAnimation(parent: _shimmerController, curve: Curves.linear),
     );
 
-    // Entrance: 1.2s for buttons and high score
     _entranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -93,7 +94,52 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
       ),
     );
 
+    _scoreCounterController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _scoreCounterAnimation = IntTween(begin: 0, end: 0).animate(
+      CurvedAnimation(parent: _scoreCounterController, curve: Curves.easeOutCubic),
+    );
+
+    _loadScoreData();
     _entranceController.forward();
+  }
+
+  Future<void> _loadScoreData() async {
+    int targetScore = 0;
+    String label = 'GLOBAL BEST';
+
+    try {
+      if (AuthService.instance.isLoggedIn) {
+        final myEntry = await LeaderboardService.instance.getMyEntry();
+        if (myEntry != null) {
+          targetScore = myEntry.score;
+          label = 'YOUR BEST';
+        } else {
+          // If logged in but no score, show global best
+          final topTen = await LeaderboardService.instance.getTopTen();
+          if (topTen.isNotEmpty) targetScore = topTen.first.score;
+        }
+      } else {
+        final topTen = await LeaderboardService.instance.getTopTen();
+        if (topTen.isNotEmpty) targetScore = topTen.first.score;
+      }
+    } catch (e) {
+      debugPrint('Error fetching leaderboard: $e');
+    }
+
+    if (mounted) {
+      setState(() {
+        _scoreLabel = label;
+        _isLoadingScore = false;
+        
+        _scoreCounterAnimation = IntTween(begin: 0, end: targetScore).animate(
+          CurvedAnimation(parent: _scoreCounterController, curve: Curves.easeOutCubic),
+        );
+      });
+      _scoreCounterController.forward();
+    }
   }
 
   @override
@@ -102,6 +148,7 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
     _floatController.dispose();
     _entranceController.dispose();
     _shimmerController.dispose();
+    _scoreCounterController.dispose();
     super.dispose();
   }
 
@@ -111,7 +158,7 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // Radial Light Bloom behind title
+          // Radial Light Bloom
           Center(
             child: Container(
               width: 400,
@@ -128,7 +175,7 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
             ),
           ),
 
-          // Top Section: High Score (Fade In)
+          // Top Section: High Score
           Positioned(
             top: 60,
             left: 0,
@@ -137,9 +184,9 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
               opacity: _opacityAnimation,
               child: Column(
                 children: [
-                  const Text(
-                    'HIGH SCORE',
-                    style: TextStyle(
+                  Text(
+                    _scoreLabel,
+                    style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 14,
                       letterSpacing: 6,
@@ -147,15 +194,33 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    '${widget.game.highScore}',
-                    style: const TextStyle(
-                      color: Colors.cyanAccent,
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 2,
+                  if (_isLoadingScore)
+                    const SizedBox(
+                      height: 44,
+                      width: 44,
+                      child: Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.cyanAccent,
+                        ),
+                      ),
+                    )
+                  else
+                    AnimatedBuilder(
+                      animation: _scoreCounterAnimation,
+                      builder: (context, child) {
+                        return Text(
+                          '${_scoreCounterAnimation.value}',
+                          style: const TextStyle(
+                            color: Colors.cyanAccent,
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 2,
+                          ),
+                        );
+                      },
                     ),
-                  ),
                 ],
               ),
             ),
@@ -164,11 +229,10 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
           // Center Section: Title and Buttons
           Center(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center, // Centered properly
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const SizedBox(height: 40), // Offset slightly for top balance
+                const SizedBox(height: 40),
                 
-                // Floating & Pulsing Title
                 AnimatedBuilder(
                   animation: Listenable.merge([_pulseAnimation, _floatAnimation, _shimmerAnimation]),
                   builder: (context, child) {
@@ -179,13 +243,11 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
                         scale: _pulseAnimation.value,
                         child: SizedBox(
                           width: screenWidth,
-                          height: 100, // Fixed height to prevent layout shifts
+                          height: 100,
                           child: Stack(
                             clipBehavior: Clip.none,
                             alignment: Alignment.center,
                             children: [
-                              // 3 Layers for neon glow
-                              // Outer Glow
                               Positioned(
                                 left: 0,
                                 right: 0,
@@ -200,11 +262,10 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
                                       ..style = PaintingStyle.stroke
                                       ..strokeWidth = 8
                                       ..color = Colors.cyanAccent.withValues(alpha: 0.2)
-                                      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20),
+                                      ..blendMode = BlendMode.plus,
                                   ),
                                 ),
                               ),
-                              // Inner Glow
                               Positioned(
                                 left: 0,
                                 right: 0,
@@ -219,11 +280,10 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
                                       ..style = PaintingStyle.stroke
                                       ..strokeWidth = 3
                                       ..color = Colors.cyanAccent.withValues(alpha: 0.5)
-                                      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+                                      ..blendMode = BlendMode.plus,
                                   ),
                                 ),
                               ),
-                              // Main Text with Shimmer
                               Positioned(
                                 left: 0,
                                 right: 0,
@@ -266,7 +326,6 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
                 
                 const SizedBox(height: 80),
 
-                // Buttons Section
                 SlideTransition(
                   position: _playButtonSlide,
                   child: _MenuButton(
@@ -285,6 +344,7 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
                     label: 'LEADERBOARD',
                     onPressed: () {
                       AudioManager.instance.playSfx('button.wav');
+                      widget.game.overlays.add(Overlays.leaderboard);
                     },
                     primary: false,
                   ),
@@ -320,8 +380,6 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
   }
 }
 
-
-
 class _MenuButton extends StatefulWidget {
   final String label;
   final VoidCallback onPressed;
@@ -338,9 +396,11 @@ class _MenuButton extends StatefulWidget {
 }
 
 class _MenuButtonState extends State<_MenuButton>
-    with SingleTickerProviderStateMixin {
-  bool _isHovered = false;
+    with TickerProviderStateMixin {
+  bool _isPressed = false;
   late AnimationController _glowController;
+  late AnimationController _scaleController;
+  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
@@ -348,11 +408,20 @@ class _MenuButtonState extends State<_MenuButton>
     _glowController = AnimationController(
         vsync: this, duration: const Duration(seconds: 2))
       ..repeat(reverse: true);
+
+    _scaleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _scaleController, curve: Curves.easeInOut),
+    );
   }
 
   @override
   void dispose() {
     _glowController.dispose();
+    _scaleController.dispose();
     super.dispose();
   }
 
@@ -362,51 +431,60 @@ class _MenuButtonState extends State<_MenuButton>
     final opacity = widget.primary ? 0.15 : 0.05;
 
     return GestureDetector(
-      onTapDown: (_) => setState(() => _isHovered = true),
-      onTapUp: (_) => setState(() => _isHovered = false),
-      onTapCancel: () => setState(() => _isHovered = false),
+      onTapDown: (_) {
+        setState(() => _isPressed = true);
+        _scaleController.forward();
+      },
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        _scaleController.reverse();
+      },
+      onTapCancel: () {
+        setState(() => _isPressed = false);
+        _scaleController.reverse();
+      },
       onTap: widget.onPressed,
-      child: AnimatedBuilder(
-        animation: _glowController,
-        builder: (context, child) {
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: 280,
-            padding: const EdgeInsets.symmetric(vertical: 18),
-            decoration: BoxDecoration(
-              color: baseColor.withValues(alpha: _isHovered ? opacity + 0.1 : opacity),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: widget.primary
-                    ? baseColor.withValues(
-                        alpha: 0.3 + (0.4 * _glowController.value))
-                    : baseColor.withValues(alpha: 0.2),
-                width: 2,
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: AnimatedBuilder(
+          animation: _glowController,
+          builder: (context, child) {
+            return Container(
+              width: 280,
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              decoration: BoxDecoration(
+                color: baseColor.withValues(alpha: _isPressed ? opacity + 0.1 : opacity),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: widget.primary
+                      ? baseColor.withValues(alpha: 0.3 + (0.4 * _glowController.value))
+                      : baseColor.withValues(alpha: 0.2),
+                  width: 2,
+                ),
+                boxShadow: widget.primary
+                    ? [
+                        BoxShadow(
+                          color: baseColor.withValues(alpha: 0.1 + (0.2 * _glowController.value)),
+                          blurRadius: 10 + (8 * _glowController.value),
+                          spreadRadius: 1,
+                        )
+                      ]
+                    : null,
               ),
-              boxShadow: widget.primary
-                  ? [
-                      BoxShadow(
-                        color: baseColor.withValues(
-                            alpha: 0.1 + (0.2 * _glowController.value)),
-                        blurRadius: 10 + (8 * _glowController.value),
-                        spreadRadius: 1,
-                      )
-                    ]
-                  : null,
-            ),
-            child: Center(
-              child: Text(
-                widget.label,
-                style: TextStyle(
-                  color: baseColor.withValues(alpha: 0.95),
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 6,
+              child: Center(
+                child: Text(
+                  widget.label,
+                  style: TextStyle(
+                    color: baseColor.withValues(alpha: 0.95),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 6,
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
