@@ -2,6 +2,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'audio/audio_manager.dart';
 import 'camera/camera_effects.dart';
+import 'components/score_popup.dart';
 import 'components/player.dart';
 import 'components/enemy.dart';
 import 'components/starfield.dart';
@@ -182,9 +183,17 @@ class ZeroVectorGame extends FlameGame with HasCollisionDetection {
   }
 
   /// Called by Enemy on kill — handles score, life rewards, and shake.
-  void onEnemyKilled(int scoreValue) {
+  void onEnemyKilled(int scoreValue, Vector2 pos, bool isAssault) {
     _score += scoreValue;
     killCount++;
+
+    // Spawn floating score popup
+    add(ScorePopup(
+      position: pos + Vector2(0, -20), // Spawn slightly above center
+      score: scoreValue,
+      color: isAssault ? const Color(0xFFFFC857) : const Color(0xFF00E5FF),
+    ));
+
     // Life reward every 15 kills — only if below maxLives
     if (killCount % 15 == 0 && lives < maxLives) {
       lives++;

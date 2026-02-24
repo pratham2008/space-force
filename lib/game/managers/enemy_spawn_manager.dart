@@ -73,21 +73,37 @@ class EnemySpawnManager extends Component
 
   void _spawnEnemyImpl({required bool aggressive}) {
     final x = _random.nextDouble() * game.size.x;
+    final w = game.wave;
+
+    // ── Assault gating: Wave 7+ only, precise threshold per spec ─────────────
+    // Wave 7–9  → 20 %  |  Wave 10–14 → 30 %  |  Wave 15+ → 40 %
+    EnemyType type = EnemyType.interceptor;
+    if (w >= 7) {
+      final assaultChance = w >= 15 ? 0.40 : (w >= 10 ? 0.30 : 0.20);
+      if (_random.nextDouble() < assaultChance) {
+        type = EnemyType.assault;
+      }
+    }
+
     game.add(
       Enemy(
         position: Vector2(x, -20),
+        type: type,
         baseSpeed: _calculateEnemySpeed(),
-        scoreValue: 10,
-        hp: _calculateEnemyHp(),
+        scoreValue: type == EnemyType.assault ? 25 : 10,
+        hp: _calculateEnemyHp(type),
         hoverYFraction: _calculateHoverY(),
         startAggressive: aggressive,
-        wave: game.wave,
+        wave: w,
       ),
     );
   }
 
-  /// enemyHp = 2 + floor(wave * 0.6)
-  int _calculateEnemyHp() => 2 + (game.wave * 0.6).floor();
+  /// Hp scales with wave. Assault enemies get +1 base HP.
+  int _calculateEnemyHp(EnemyType type) {
+    final base = 2 + (game.wave * 0.6).floor();
+    return type == EnemyType.assault ? base + 1 : base;
+  }
 
   /// Speed scales gently with wave number.
   double _calculateEnemySpeed() {

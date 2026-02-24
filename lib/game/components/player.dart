@@ -10,24 +10,27 @@ import 'bullet.dart';
 class Player extends PositionComponent
     with HasGameReference<ZeroVectorGame>, DragCallbacks, CollisionCallbacks {
   // ── Fire ────────────────────────────────────────────────────────────────────
-  static const double _fireRate = 0.3;
+  static const double _fireRate = 0.25;
   double _fireTimer = 0;
+  bool _fireFromLeft = true; // For alternating cannons
+  
+  // 1-frame muzzle flash (visual only)
+  bool _showMuzzleFlash = false;
+  final Vector2 _currentMuzzlePos = Vector2.zero();
 
   // ── Dimensions ───────────────────────────────────────────────────────────────
-  static const double _size = 52.0;
+  static const double _size = 56.0; // Slightly larger for detail
 
   // ── Inertia movement ─────────────────────────────────────────────────────────
   final Vector2 _velocity = Vector2.zero();
-  static const double _acceleration = 1200.0; // px/s² per drag-delta
-  static const double _maxSpeed     = 460.0;  // px/s
-  static const double _friction     = 8.0;    // exponential drag multiplier
+  static const double _acceleration = 1200.0;
+  static const double _maxSpeed     = 460.0;
+  static const double _friction     = 8.0;
 
-  // Pending drag delta applied on next update()
   final Vector2 _dragDelta = Vector2.zero();
 
   // ── Tilt ─────────────────────────────────────────────────────────────────────
-  // Max tilt ±14°
-  static const double _maxTilt = 0.24; // radians
+  static const double _maxTilt = 0.28; // ±16°
 
   // ── Flash / invuln ──────────────────────────────────────────────────────────
   static const double _flashDuration = 0.2;
@@ -51,42 +54,38 @@ class Player extends PositionComponent
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-    position = Vector2(game.size.x / 2, game.size.y - 100);
-    add(RectangleHitbox());
+    position = Vector2(game.size.x / 2, game.size.y - 120);
+    // Hitbox is slightly narrowed for better gameplay feel
+    add(RectangleHitbox(
+      size: Vector2(_size * 0.7, _size * 0.9),
+      position: Vector2(_size * 0.15, _size * 0.05),
+    ));
   }
 
-  // ── Drag ─────────────────────────────────────────────────────────────────────
-  // Accumulate delta only. Position is moved exclusively in update().
   @override
   void onDragUpdate(DragUpdateEvent event) {
     _dragDelta.add(event.localDelta);
   }
 
-  // ── Update ───────────────────────────────────────────────────────────────────
   @override
   void update(double dt) {
     super.update(dt);
 
-    // ── Apply drag delta as acceleration ─────────────────────────────────
     if (_dragDelta.length > 0) {
       _velocity.add(_dragDelta * _acceleration * dt);
       _dragDelta.setZero();
     }
 
-    // ── Friction / drag ──────────────────────────────────────────────────
     _velocity.scale(1.0 / (1.0 + _friction * dt));
 
-    // ── Clamp speed ──────────────────────────────────────────────────────
     if (_velocity.length > _maxSpeed) {
       _velocity.normalize();
       _velocity.scale(_maxSpeed);
     }
 
-    // ── Move ─────────────────────────────────────────────────────────────
     position.add(_velocity * dt);
 
-    // ── Boundary clamp + velocity zeroing ────────────────────────────────
-    final minY = game.size.y * 0.6;
+    final minY = game.size.y * 0.55;
     final hw   = _size / 2;
     if (position.x < hw) {
       position.x = hw;
@@ -105,22 +104,18 @@ class Player extends PositionComponent
       if (_velocity.y > 0) _velocity.y = 0;
     }
 
-    // ── Tilt ─────────────────────────────────────────────────────────────
     angle = (_velocity.x / _maxSpeed).clamp(-1.0, 1.0) * _maxTilt;
 
-    // ── Thruster jitter ──────────────────────────────────────────────────
     _thrusterJitterTimer += dt;
     if (_thrusterJitterTimer >= _thrusterJitterRate) {
       _thrusterJitterTimer = 0;
-      _thrusterJitter = (_rng.nextDouble() - 0.5) * 6.0;
+      _thrusterJitter = (_rng.nextDouble() - 0.5) * 8.0;
     }
 
-    // ── Flash timer ──────────────────────────────────────────────────────
     if (_flashTimer > 0) {
       _flashTimer = (_flashTimer - dt).clamp(0.0, _flashDuration);
     }
 
-    // ── Invuln blink ─────────────────────────────────────────────────────
     if (game.isInvulnerable) {
       _blinkTimer += dt;
       if (_blinkTimer >= _blinkRate) {
@@ -132,7 +127,9 @@ class Player extends PositionComponent
       _blinkTimer = 0;
     }
 
-    // ── Auto-fire ────────────────────────────────────────────────────────
+    // Reset muzzle flash
+    _showMuzzleFlash = false;
+
     _fireTimer += dt;
     if (_fireTimer >= _fireRate) {
       _fireTimer = 0;
@@ -141,11 +138,22 @@ class Player extends PositionComponent
   }
 
   void _shoot() {
-    game.add(Bullet(position: Vector2(position.x, position.y - _size / 2)));
+    // Cannon positions on wings
+    final double offsetX = _fireFromLeft ? -18.0 : 18.0;
+    final double offsetY = -4.0;
+    
+    _currentMuzzlePos.setValues(size.x / 2 + offsetX, size.y / 2 + offsetY);
+    _showMuzzleFlash = true;
+
+    // Bullet spawning (global coords)
+    // We adjust by angle to spawn accurately from cannon tips
+    final spawnPos = position + (Vector2(offsetX, offsetY)..rotate(angle));
+    game.add(Bullet(position: spawnPos));
+    
     game.audioManager.playSfx('shoot.wav');
+    _fireFromLeft = !_fireFromLeft;
   }
 
-  // ── Damage feedback ──────────────────────────────────────────────────────────
   void takeDamage({bool isCollision = false}) {
     if (game.isInvulnerable && !isCollision) return;
     _flashTimer = _flashDuration;
@@ -154,9 +162,7 @@ class Player extends PositionComponent
       MoveByEffect(
         Vector2(0, -knockback),
         EffectController(
-          duration: 0.08,
-          reverseDuration: 0.12,
-          curve: Curves.easeOut,
+          duration: 0.08, reverseDuration: 0.12, curve: Curves.easeOut,
         ),
       ),
     );
@@ -169,99 +175,180 @@ class Player extends PositionComponent
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────
+
   @override
   void render(Canvas canvas) {
     if (!_invulnBlinkVisible) return;
 
-    final shipColor = _flashTimer > 0
-        ? Color.lerp(
-            const Color(0xFF00E5FF),
-            const Color(0xFFFF1744),
-            (_flashTimer / _flashDuration).clamp(0.0, 1.0),
-          )!
-        : const Color(0xFF00E5FF);
-
     final cx = size.x / 2;
     final cy = size.y / 2;
 
-    // ── Thruster flame (drawn behind ship) ────────────────────────────────
+    // ── Engine flames (drawn first, furthest back) ────────────────────────
     final speed = _velocity.length;
-    if (speed > 20) {
-      _drawThruster(canvas, cx, cy, speed);
+    if (speed > 10) {
+      _drawTwinThrusters(canvas, cx, cy, speed);
     }
 
-    // ── Outer glow pass (BlendMode.plus, wider stroke) ────────────────────
-    final glowPaint = Paint()
-      ..color = shipColor.withValues(alpha: 0.35)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 8.0
-      ..blendMode = BlendMode.plus;
+    // Colors
+    final hullColor     = const Color(0xFF2B2F36); // Gunmetal
+    final wingColor     = const Color(0xFF3A3F47); // Steel Gray
 
-    canvas.drawPath(_buildShipPath(cx, cy), glowPaint);
+    Paint p = Paint();
 
-    // ── Ship body fill ────────────────────────────────────────────────────
-    final bodyPaint = Paint()
-      ..color = shipColor.withValues(alpha: 0.9)
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(_buildShipPath(cx, cy), bodyPaint);
+    // ── 1. Wings (Bottom layer) ───────────────────────────────────────────
+    final wingPath = Path()
+      ..moveTo(cx - 2, cy - 2)
+      ..lineTo(cx - 24, cy + 8)  // left wing tip back
+      ..lineTo(cx - 26, cy + 4)  // left wing tip front
+      ..lineTo(cx - 4, cy - 8)   // left wing root front
+      ..lineTo(cx + 4, cy - 8)   // right wing root front
+      ..lineTo(cx + 26, cy + 4)  // right wing tip front
+      ..lineTo(cx + 24, cy + 8)  // right wing tip back
+      ..lineTo(cx + 2, cy - 2);
 
-    // ── Inner highlight stroke ────────────────────────────────────────────
-    final strokePaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.5)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    canvas.drawPath(_buildShipPath(cx, cy), strokePaint);
-  }
+    p.color = wingColor;
+    canvas.drawPath(wingPath, p);
 
-  Path _buildShipPath(double cx, double cy) {
-    // Symmetrical fuselage:  nose → right-fin → right-rear → centre-rear →
-    //                         left-rear → left-fin → close
-    return Path()
-      ..moveTo(cx, 0)                         // nose
-      ..lineTo(cx + 20, cy + 4)               // right shoulder
-      ..lineTo(cx + 24, cy + 14)              // right wingtip flare
-      ..lineTo(cx + 16, cy + 20)              // right wing inner
-      ..lineTo(cx + 8,  cy + 18)              // right fuselage
-      ..lineTo(cx + 5,  size.y - 4)           // right tail
-      ..lineTo(cx,      size.y)               // tail centre
-      ..lineTo(cx - 5,  size.y - 4)           // left tail
-      ..lineTo(cx - 8,  cy + 18)              // left fuselage
-      ..lineTo(cx - 16, cy + 20)              // left wing inner
-      ..lineTo(cx - 24, cy + 14)              // left wingtip flare
-      ..lineTo(cx - 20, cy + 4)               // left shoulder
+    // ── 2. Fuselage (Central body) ────────────────────────────────────────
+    final fuselage = Path()
+      ..moveTo(cx, 4)               // Nose (sharp)
+      ..lineTo(cx + 6, cy - 10)     // shoulder R
+      ..lineTo(cx + 6, size.y - 4)  // Rear R
+      ..lineTo(cx, size.y)          // Engine exhaust indent
+      ..lineTo(cx - 6, size.y - 4)  // Rear L
+      ..lineTo(cx - 6, cy - 10)     // shoulder L
       ..close();
+
+    p.color = hullColor;
+    canvas.drawPath(fuselage, p);
+
+    // ── 3. Panel Lines ───────────────────────────────────────────────────
+    p.style = PaintingStyle.stroke;
+    p.strokeWidth = 1.0;
+    p.color = Colors.black.withValues(alpha: 0.4);
+    canvas.drawPath(wingPath, p);
+    canvas.drawPath(fuselage, p);
+    
+    // Cross panel lines
+    canvas.drawLine(Offset(cx - 6, cy), Offset(cx + 6, cy), p);
+    canvas.drawLine(Offset(cx - 6, cy + 12), Offset(cx + 6, cy + 12), p);
+
+    // ── 4. Stabilizers ───────────────────────────────────────────────────
+    final stabL = Path()
+      ..moveTo(cx - 4, size.y - 8)
+      ..lineTo(cx - 10, size.y)
+      ..lineTo(cx - 10, size.y - 4)
+      ..close();
+    final stabR = Path()
+      ..moveTo(cx + 4, size.y - 8)
+      ..lineTo(cx + 10, size.y)
+      ..lineTo(cx + 10, size.y - 4)
+      ..close();
+    
+    p.style = PaintingStyle.fill;
+    p.color = hullColor;
+    canvas.drawPath(stabL, p);
+    canvas.drawPath(stabR, p);
+
+    // ── 5. Cockpit ────────────────────────────────────────────────────────
+    final cockpit = Rect.fromCenter(center: Offset(cx, cy - 12), width: 6, height: 16);
+    final cockpitRRect = RRect.fromRectAndRadius(cockpit, const Radius.circular(3));
+    
+    p.shader = const LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [Colors.white, Color(0xFF00E5FF)],
+      stops: [0.1, 0.9],
+    ).createShader(cockpit);
+    canvas.drawRRect(cockpitRRect, p);
+    p.shader = null;
+
+    // ── 6. Cannons (Weapon Mounts) ────────────────────────────────────────
+    final cannonL = Rect.fromLTWH(cx - 20, cy - 2, 2, 8);
+    final cannonR = Rect.fromLTWH(cx + 18, cy - 2, 2, 8);
+    p.color = const Color(0xFF1A1A1A);
+    canvas.drawRect(cannonL, p);
+    canvas.drawRect(cannonR, p);
+    
+    // Muzzle tips (Red)
+    p.color = const Color(0xFFFF1744);
+    canvas.drawCircle(Offset(cx - 19, cy - 2), 1.2, p);
+    canvas.drawCircle(Offset(cx + 19, cy - 2), 1.2, p);
+
+    // ── 7. Muzzle Flash (1-frame) ─────────────────────────────────────────
+    if (_showMuzzleFlash) {
+      _drawMuzzleFlash(canvas);
+    }
+
+    // ── 8. Glow overlays (BlendMode.plus) ─────────────────────────────────
+    if (_flashTimer > 0) {
+      _drawDamageFlash(canvas, wingPath, fuselage);
+    }
   }
 
-  void _drawThruster(Canvas canvas, double cx, double cy, double speed) {
+  void _drawTwinThrusters(Canvas canvas, double cx, double cy, double speed) {
     final intensity = (speed / _maxSpeed).clamp(0.0, 1.0);
-    final flameH = 10 + 16 * intensity + _thrusterJitter.abs();
-    final flameW = 6 + 4 * intensity;
+    final h = 12 + 20 * intensity + _thrusterJitter.abs();
+    final w = 4 + 2 * intensity;
 
-    // Two overlapping cones:  outer (blue) + inner (white)
-    final outerPath = Path()
-      ..moveTo(cx - flameW, size.y - 2)
-      ..lineTo(cx, size.y + flameH)
-      ..lineTo(cx + flameW, size.y - 2)
+    _drawExhaust(canvas, Offset(cx - 4, size.y - 2), w, h, intensity);
+    _drawExhaust(canvas, Offset(cx + 4, size.y - 2), w, h, intensity);
+  }
+
+  void _drawExhaust(Canvas canvas, Offset top, double w, double h, double intensity) {
+    // Outer glow
+    final glow = Path()
+      ..moveTo(top.dx - w, top.dy)
+      ..lineTo(top.dx, top.dy + h)
+      ..lineTo(top.dx + w, top.dy)
       ..close();
 
     canvas.drawPath(
-      outerPath,
+      glow,
       Paint()
-        ..color = const Color(0xFF00E5FF).withValues(alpha: 0.5 * intensity)
+        ..color = const Color(0xFF00E5FF).withValues(alpha: 0.4 * intensity)
         ..blendMode = BlendMode.plus,
     );
 
-    final innerPath = Path()
-      ..moveTo(cx - flameW * 0.4, size.y - 2)
-      ..lineTo(cx, size.y + flameH * 0.6 + _thrusterJitter)
-      ..lineTo(cx + flameW * 0.4, size.y - 2)
+    // Core
+    final core = Path()
+      ..moveTo(top.dx - w * 0.4, top.dy)
+      ..lineTo(top.dx, top.dy + h * 0.6)
+      ..lineTo(top.dx + w * 0.4, top.dy)
       ..close();
 
     canvas.drawPath(
-      innerPath,
+      core,
       Paint()
-        ..color = Colors.white.withValues(alpha: 0.7 * intensity)
+        ..color = Colors.white.withValues(alpha: 0.8 * intensity)
         ..blendMode = BlendMode.plus,
     );
+  }
+
+  void _drawMuzzleFlash(Canvas canvas) {
+    canvas.drawCircle(
+      Offset(_currentMuzzlePos.x, _currentMuzzlePos.y),
+      8,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.8)
+        ..blendMode = BlendMode.plus,
+    );
+    canvas.drawCircle(
+      Offset(_currentMuzzlePos.x, _currentMuzzlePos.y),
+      14,
+      Paint()
+        ..color = const Color(0xFF00E5FF).withValues(alpha: 0.3)
+        ..blendMode = BlendMode.plus,
+    );
+  }
+
+  void _drawDamageFlash(Canvas canvas, Path wings, Path fuselage) {
+    final a = (_flashTimer / _flashDuration).clamp(0.0, 1.0);
+    final p = Paint()
+      ..color = const Color(0xFFFF1744).withValues(alpha: 0.6 * a)
+      ..blendMode = BlendMode.plus;
+    
+    canvas.drawPath(wings, p);
+    canvas.drawPath(fuselage, p);
   }
 }
