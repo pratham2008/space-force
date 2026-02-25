@@ -2,7 +2,7 @@ import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../zero_vector_game.dart';
-import 'enemy.dart';
+import 'hittable.dart';
 
 class Bullet extends PositionComponent
     with HasGameReference<ZeroVectorGame>, CollisionCallbacks {
@@ -37,8 +37,8 @@ class Bullet extends PositionComponent
     PositionComponent other,
   ) {
     super.onCollisionStart(intersectionPoints, other);
-    if (other is Enemy) {
-      other.hit(_damage);
+    if (other is Hittable) {
+      (other as Hittable).hit(_damage);
       removeFromParent();
     }
   }

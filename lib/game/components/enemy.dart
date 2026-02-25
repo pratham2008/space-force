@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../zero_vector_game.dart';
 import '../effects/particle_effects.dart';
 import '../effects/warp_ring_component.dart';
+import 'hittable.dart';
 import 'player.dart';
 
 // ── Enemy classification ──────────────────────────────────────────────────────
@@ -16,7 +17,7 @@ enum EnemyType { interceptor, assault }
 enum _FireState { idle, bursting }
 
 class Enemy extends PositionComponent
-    with HasGameReference<ZeroVectorGame>, CollisionCallbacks {
+    with HasGameReference<ZeroVectorGame>, CollisionCallbacks, Hittable {
 
   // ── Classification ──────────────────────────────────────────────────────────
   final EnemyType type;
@@ -259,6 +260,7 @@ class Enemy extends PositionComponent
 
   // ── HP / Collision ──────────────────────────────────────────────────────────
 
+  @override
   void hit(int damage) {
     hp -= damage;
     if (hp <= 0) {

@@ -1,0 +1,21 @@
+﻿Analyzing zerovector...                                         
+
+warning - Unused import: 'package:flame/effects.dart' - lib\game\components\elite_warning_banner.dart:2:8 - unused_import
+warning - The value of the field 'missile' isn't used - lib\game\components\mini_boss.dart:12:38 - unused_field
+   info - The private field _fireMode could be 'final' - lib\game\components\mini_boss.dart:31:21 - prefer_final_fields
+warning - The value of the field '_fireMode' isn't used - lib\game\components\mini_boss.dart:31:21 - unused_field
+warning - The value of the field '_exhaustPhase' isn't used - lib\game\components\missile_projectile.dart:29:10 - unused_field
+   info - Statements in an if should be enclosed in a block - lib\game\zero_vector_game.dart:284:18 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\game\zero_vector_game.dart:285:23 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\game\zero_vector_game.dart:286:10 - curly_braces_in_flow_control_structures
+
+flutter : 8 issues found. (ran in 8.0s)
+At line:1 char:1
++ flutter analyze --no-pub 2>&1 | Out-File 
+-Encoding utf8 analyze_out.t ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (8 iss 
+   ues found. (ran in 8.0s):String) [], RemoteExc  
+  eption
+    + FullyQualifiedErrorId : NativeCommandError
+ 

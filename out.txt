@@ -1,0 +1,16 @@
+﻿Analyzing zerovector...                                         
+
+   info - The member 'hit' overrides an inherited member but isn't annotated with '@override' - lib\game\components\enemy.dart:263:8 - annotate_overrides
+   info - The member 'hit' overrides an inherited member but isn't annotated with '@override' - lib\game\components\mini_boss.dart:132:8 - annotate_overrides
+
+flutter : 2 issues found. (ran in 16.7s)
+At line:1 char:1
++ flutter analyze --no-pub 2>&1 | Out-File 
+-Encoding utf8 out.txt; type ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    2 
+issues found. (ran in 16.7s):String) []    , 
+RemoteException
+    + FullyQualifiedErrorId : NativeCommandEr    
+ror
+ 
