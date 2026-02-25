@@ -291,142 +291,160 @@ class Enemy extends PositionComponent
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  static final Paint _hullPaint = Paint()..color = const Color(0xFF141821);
+  static final Paint _armorPaint = Paint()..color = const Color(0xFF1F2430);
+  static final Paint _cyanGlowPaint = Paint()
+    ..color = const Color(0xFF00E5FF).withValues(alpha: 0.5)
+    ..blendMode = BlendMode.plus;
+  static final Paint _magentaGlowPaint = Paint()
+    ..color = const Color(0xFFFF2D95).withValues(alpha: 0.6)
+    ..blendMode = BlendMode.plus;
+  static final Paint _linePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.0
+    ..color = Colors.white.withValues(alpha: 0.15);
+
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2;
     final cy = size.y / 2;
 
-    // Darker maroon vs near-black for better contrast
-    final hullColor     = const Color(0xFF5A0E1A); 
-    final wingHighlight = const Color(0xFF8B1C2D);
-    final coreColor     = const Color(0xFFFF1744);
-
-    final p = Paint();
-
-    // ── 1. Engine exhaust (increased intensity) ──────────────────────────────
-    _drawEngineExhaust(canvas, cx, cy);
-
-    // ── 2. Wings (forward-swept) ──────────────────────────────────────────────
-    final wingPath = Path()
-      ..moveTo(cx, cy - 6)
-      ..lineTo(cx + cx * 0.9, cy - 10)
-      ..lineTo(cx + cx * 0.7, cy + 12)
-      ..lineTo(cx, cy + 4)
-      ..lineTo(cx - cx * 0.7, cy + 12)
-      ..lineTo(cx - cx * 0.9, cy - 10)
-      ..close();
-
-    p.color = hullColor;
-    canvas.drawPath(wingPath, p);
-
-    // Wing secondary highlight
-    p.color = wingHighlight;
-    canvas.drawPath(
-      Path()
-        ..moveTo(cx, cy - 2)
-        ..lineTo(cx + cx * 0.5, cy + 2)
-        ..lineTo(cx, cy + 2)
-        ..lineTo(cx - cx * 0.5, cy + 2)
-        ..close(),
-      p,
-    );
-
-    // ── 3. Caution stripes (assault only) ─────────────────────────────────────
     if (isAssault) {
-      _drawCautionStripes(canvas, wingPath);
+      _renderAssault(canvas, cx, cy);
+    } else {
+      _renderInterceptor(canvas, cx, cy);
     }
 
-    // ── 4. Main body ──────────────────────────────────────────────────────────
-    final bodyPath = Path()
-      ..moveTo(cx, size.y)
-      ..lineTo(cx + 10, cy + 6)
-      ..lineTo(cx, 0)
-      ..lineTo(cx - 10, cy + 6)
-      ..close();
-
-    p.color = hullColor;
-    canvas.drawPath(bodyPath, p);
-
-    // ── 5. Red core (Radial Gradient) ─────────────────────────────────────────
-    final coreRect = Rect.fromCenter(center: Offset(cx, cy), width: 12, height: 12);
-    p.shader = RadialGradient(
-      colors: [Colors.white, coreColor, coreColor.withValues(alpha: 0)],
-      stops: const [0.0, 0.4, 1.0],
-    ).createShader(coreRect);
-    canvas.drawOval(coreRect, p);
-    p.shader = null;
-
-    // Core glow — assault has more intense glow
-    canvas.drawCircle(
-      Offset(cx, cy),
-      14,
-      Paint()
-        ..color = coreColor.withValues(alpha: isAssault ? 0.7 : 0.5)
-        ..blendMode = BlendMode.plus,
-    );
-
-    // ── 6. Directional Rim Light (Top-Left) ──────────────────────────────────
-    final rimPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.3)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..blendMode = BlendMode.plus;
-    
-    // Top-left "glint" lines on wings and nose
-    canvas.drawPath(
-      Path()
-        ..moveTo(cx - cx * 0.9, cy - 10)
-        ..lineTo(cx - cx * 0.5, cy - 8),
-      rimPaint,
-    );
-    canvas.drawPath(
-      Path()
-        ..moveTo(cx - 8, cy - 2)
-        ..lineTo(cx, 4),
-      rimPaint,
-    );
-
-    // ── 7. Weapon mounts ──────────────────────────────────────────────────────
-    final mountW = isAssault ? 6.0 : 4.0;
-    final mountH = isAssault ? 10.0 : 8.0;
-    p.color = const Color(0xFF1A1A1A);
-    canvas.drawRect(Rect.fromLTWH(cx - cx * 0.8, cy - 6, mountW, mountH), p);
-    canvas.drawRect(Rect.fromLTWH(cx + cx * 0.8 - mountW, cy - 6, mountW, mountH), p);
-
-    if (isAssault) {
-      p.color = const Color(0xFFFF1744);
-      canvas.drawCircle(Offset(cx - cx * 0.8 + mountW / 2, cy - 6), 2, p);
-      canvas.drawCircle(Offset(cx + cx * 0.8 - mountW / 2, cy - 6), 2, p);
-    }
-
-    // ── 8. HP bar ─────────────────────────────────────────────────────────────
     _drawHpBar(canvas);
   }
 
-  void _drawEngineExhaust(Canvas canvas, double cx, double cy) {
-    canvas.drawPath(
-      Path()
-        ..moveTo(cx - 6, size.y - 2)
-        ..lineTo(cx, size.y + 16)
-        ..lineTo(cx + 6, size.y - 2)
-        ..close(),
-      Paint()
-        ..color = const Color(0xFFFF1744).withValues(alpha: 0.6)
-        ..blendMode = BlendMode.plus,
-    );
+  void _renderInterceptor(Canvas canvas, double cx, double cy) {
+    // ── 1. Slim V-Hull (Base Layer) ──────────────────────────────────────
+    final vHull = Path()
+      ..moveTo(cx, size.y - 4)                // Rear point
+      ..lineTo(cx + 26, 8)                    // Right tip (forward leaning)
+      ..lineTo(cx + 10, 0)                    // Right inner nose
+      ..lineTo(cx, 12)                        // Center indent
+      ..lineTo(cx - 10, 0)                    // Left inner nose
+      ..lineTo(cx - 26, 8)                    // Left tip (forward leaning)
+      ..close();
+    
+    canvas.drawPath(vHull, _hullPaint);
+
+    // ── 2. Armor Plating ─────────────────────────────────────────────────
+    final armor = Path()
+      ..moveTo(cx, size.y - 12)
+      ..lineTo(cx + 14, cy)
+      ..lineTo(cx, cy + 4)
+      ..lineTo(cx - 14, cy)
+      ..close();
+    canvas.drawPath(armor, _armorPaint);
+
+    // ── 3. Detail Lines ──────────────────────────────────────────────────
+    canvas.drawPath(vHull, _linePaint);
+    canvas.drawPath(armor, _linePaint);
+
+    // ── 4. Magenta Edge Highlights ───────────────────────────────────────
+    final edgePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..color = const Color(0xFFFF2D95).withValues(alpha: 0.7)
+      ..blendMode = BlendMode.plus;
+    canvas.drawLine(Offset(cx + 24, 10), Offset(cx + 10, 2), edgePaint);
+    canvas.drawLine(Offset(cx - 24, 10), Offset(cx - 10, 2), edgePaint);
+
+    // ── 5. Cyan Targeting Eye (Center) ──────────────────────────────────
+    canvas.drawCircle(Offset(cx, cy - 6), 4, Paint()..color = const Color(0xFF08121A));
+    canvas.drawCircle(Offset(cx, cy - 6), 3, _cyanGlowPaint);
+    canvas.drawCircle(Offset(cx, cy - 6), 1, Paint()..color = Colors.white..blendMode = BlendMode.plus);
+
+    // ── 6. Small Glowing Vents (Cyan) ─────────────────────────────────────
+    canvas.drawRect(Rect.fromLTWH(cx - 16, cy + 4, 3, 1.5), _cyanGlowPaint);
+    canvas.drawRect(Rect.fromLTWH(cx + 13, cy + 4, 3, 1.5), _cyanGlowPaint);
+
+    // ── 7. Engine Exhaust ────────────────────────────────────────────────
+    _drawCyberExhaustSingle(canvas, Offset(cx, size.y - 4), 8, 14, const Color(0xFFFF2D95));
   }
 
-  void _drawCautionStripes(Canvas canvas, Path wingPath) {
-    canvas.save();
-    canvas.clipPath(wingPath);
-    final sp = Paint()
-      ..color = const Color(0xFFFFD600)
+  void _renderAssault(Canvas canvas, double cx, double cy) {
+    // ── 1. Brutalist Wide Hull (Base Layer) ──────────────────────────────
+    final wideHull = Path()
+      ..moveTo(cx, 0)                         // Sharp nose
+      ..lineTo(cx + 32, cy - 4)               // Right shoulder
+      ..lineTo(cx + 28, size.y)               // Right rear
+      ..lineTo(cx - 28, size.y)               // Left rear
+      ..lineTo(cx - 32, cy - 4)               // Left shoulder
+      ..close();
+    
+    canvas.drawPath(wideHull, _hullPaint);
+
+    // ── 2. Top Secondary Armor ───────────────────────────────────────────
+    final armor = Path()
+      ..moveTo(cx, 10)
+      ..lineTo(cx + 20, cy)
+      ..lineTo(cx + 16, size.y - 8)
+      ..lineTo(cx - 16, size.y - 8)
+      ..lineTo(cx - 20, cy)
+      ..close();
+    canvas.drawPath(armor, _armorPaint);
+
+    // ── 3. Visible Dual Cannon Pods ──────────────────────────────────────
+    final podPaint = Paint()..color = const Color(0xFF0D1016);
+    canvas.drawRect(Rect.fromLTWH(cx - 30, cy - 8, 8, 16), podPaint);
+    canvas.drawRect(Rect.fromLTWH(cx + 22, cy - 8, 8, 16), podPaint);
+    
+    // Magenta cannon glow
+    canvas.drawRect(Rect.fromLTWH(cx - 28, cy - 10, 4, 2), _magentaGlowPaint);
+    canvas.drawRect(Rect.fromLTWH(cx + 24, cy - 10, 4, 2), _magentaGlowPaint);
+
+    // ── 4. Cyan Reactor Vents (Rear) ──────────────────────────────────────
+    canvas.drawRect(Rect.fromLTWH(cx - 12, size.y - 6, 8, 2), _cyanGlowPaint);
+    canvas.drawRect(Rect.fromLTWH(cx + 4, size.y - 6, 8, 2), _cyanGlowPaint);
+
+    // ── 5. Detail Paneling & Neon Accents ────────────────────────────────
+    canvas.drawPath(wideHull, _linePaint);
+    // Neon accent lines at wing roots
+    final neonCyan = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.0;
-    for (double i = -20; i < 100; i += 8) {
-      canvas.drawLine(Offset(i, 0), Offset(i + 20, 100), sp);
-    }
-    canvas.restore();
+      ..strokeWidth = 1.0
+      ..color = const Color(0xFF00E5FF).withValues(alpha: 0.6)
+      ..blendMode = BlendMode.plus;
+    canvas.drawLine(Offset(cx - 18, cy + 4), Offset(cx - 26, cy + 18), neonCyan);
+    canvas.drawLine(Offset(cx + 18, cy + 4), Offset(cx + 26, cy + 18), neonCyan);
+
+    // ── 6. Engine Exhaust ────────────────────────────────────────────────
+    _drawCyberExhaustSingle(canvas, Offset(cx, size.y - 2), 12, 18, const Color(0xFF00E5FF));
+  }
+
+  void _drawCyberExhaustSingle(Canvas canvas, Offset top, double w, double h, Color baseColor) {
+    final speedFactor = _aggressiveMode ? 1.4 : 1.0;
+    final finalH = h * speedFactor;
+    
+    final glow = Path()
+      ..moveTo(top.dx - w / 2, top.dy)
+      ..lineTo(top.dx, top.dy + finalH)
+      ..lineTo(top.dx + w / 2, top.dy)
+      ..close();
+
+    canvas.drawPath(
+      glow,
+      Paint()
+        ..color = baseColor.withValues(alpha: 0.4)
+        ..blendMode = BlendMode.plus,
+    );
+
+    final core = Path()
+      ..moveTo(top.dx - w * 0.2, top.dy)
+      ..lineTo(top.dx, top.dy + finalH * 0.5)
+      ..lineTo(top.dx + w * 0.2, top.dy)
+      ..close();
+
+    canvas.drawPath(
+      core,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.7)
+        ..blendMode = BlendMode.plus,
+    );
   }
 
   void _drawHpBar(Canvas canvas) {
@@ -443,7 +461,7 @@ class Enemy extends PositionComponent
     );
     canvas.drawRect(
       Rect.fromLTWH(startX, -10, barW * ratio, 3),
-      Paint()..color = const Color(0xFFFF1744),
+      Paint()..color = const Color(0xFFFF2D95), // Magenta HP bar for enemies
     );
   }
 

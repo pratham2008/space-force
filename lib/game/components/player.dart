@@ -176,6 +176,20 @@ class Player extends PositionComponent
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
+  // Shared Paint objects to avoid per-frame allocations
+  static final Paint _hullPaint = Paint()..color = const Color(0xFF141821);
+  static final Paint _armorPaint = Paint()..color = const Color(0xFF1F2430);
+  static final Paint _cyanGlowPaint = Paint()
+    ..color = const Color(0xFF00E5FF).withValues(alpha: 0.5)
+    ..blendMode = BlendMode.plus;
+  static final Paint _magentaGlowPaint = Paint()
+    ..color = const Color(0xFFFF2D95).withValues(alpha: 0.6)
+    ..blendMode = BlendMode.plus;
+  static final Paint _linePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.0
+    ..color = Colors.white.withValues(alpha: 0.15);
+
   @override
   void render(Canvas canvas) {
     if (!_invulnBlinkVisible) return;
@@ -183,172 +197,151 @@ class Player extends PositionComponent
     final cx = size.x / 2;
     final cy = size.y / 2;
 
-    // ── Engine flames (drawn first, furthest back) ────────────────────────
     final speed = _velocity.length;
     if (speed > 10) {
-      _drawTwinThrusters(canvas, cx, cy, speed);
+      _drawCyberThrusters(canvas, cx, cy, speed);
     }
 
-    // Colors
-    final hullColor     = const Color(0xFF2B2F36); // Gunmetal
-    final wingColor     = const Color(0xFF3A3F47); // Steel Gray
-
-    Paint p = Paint();
-
-    // ── 1. Wings (Bottom layer) ───────────────────────────────────────────
-    final wingPath = Path()
-      ..moveTo(cx - 2, cy - 2)
-      ..lineTo(cx - 24, cy + 8)  // left wing tip back
-      ..lineTo(cx - 26, cy + 4)  // left wing tip front
-      ..lineTo(cx - 4, cy - 8)   // left wing root front
-      ..lineTo(cx + 4, cy - 8)   // right wing root front
-      ..lineTo(cx + 26, cy + 4)  // right wing tip front
-      ..lineTo(cx + 24, cy + 8)  // right wing tip back
-      ..lineTo(cx + 2, cy - 2);
-
-    p.color = wingColor;
-    canvas.drawPath(wingPath, p);
-
-    // ── 2. Fuselage (Central body) ────────────────────────────────────────
-    final fuselage = Path()
-      ..moveTo(cx, 4)               // Nose (sharp)
-      ..lineTo(cx + 6, cy - 10)     // shoulder R
-      ..lineTo(cx + 6, size.y - 4)  // Rear R
-      ..lineTo(cx, size.y)          // Engine exhaust indent
-      ..lineTo(cx - 6, size.y - 4)  // Rear L
-      ..lineTo(cx - 6, cy - 10)     // shoulder L
-      ..close();
-
-    p.color = hullColor;
-    canvas.drawPath(fuselage, p);
-
-    // ── 3. Panel Lines ───────────────────────────────────────────────────
-    p.style = PaintingStyle.stroke;
-    p.strokeWidth = 1.0;
-    p.color = Colors.black.withValues(alpha: 0.4);
-    canvas.drawPath(wingPath, p);
-    canvas.drawPath(fuselage, p);
-    
-    // Cross panel lines
-    canvas.drawLine(Offset(cx - 6, cy), Offset(cx + 6, cy), p);
-    canvas.drawLine(Offset(cx - 6, cy + 12), Offset(cx + 6, cy + 12), p);
-
-    // ── 4. Stabilizers ───────────────────────────────────────────────────
-    final stabL = Path()
-      ..moveTo(cx - 4, size.y - 8)
-      ..lineTo(cx - 10, size.y)
-      ..lineTo(cx - 10, size.y - 4)
-      ..close();
-    final stabR = Path()
-      ..moveTo(cx + 4, size.y - 8)
-      ..lineTo(cx + 10, size.y)
-      ..lineTo(cx + 10, size.y - 4)
+    // ── 1. Base Delta Hull (Lower Layer) ──────────────────────────────────
+    final deltaHull = Path()
+      ..moveTo(cx, 6)                         // Sharp nose
+      ..lineTo(cx + 28, cy + 18)              // Right wing tip (swept)
+      ..lineTo(cx + 10, size.y - 2)           // Right rear
+      ..lineTo(cx, size.y - 6)                // Engine bay indent
+      ..lineTo(cx - 10, size.y - 2)           // Left rear
+      ..lineTo(cx - 28, cy + 18)              // Left wing tip (swept)
       ..close();
     
-    p.style = PaintingStyle.fill;
-    p.color = hullColor;
-    canvas.drawPath(stabL, p);
-    canvas.drawPath(stabR, p);
+    canvas.drawPath(deltaHull, _hullPaint);
 
-    // ── 5. Cockpit ────────────────────────────────────────────────────────
-    final cockpit = Rect.fromCenter(center: Offset(cx, cy - 12), width: 6, height: 16);
-    final cockpitRRect = RRect.fromRectAndRadius(cockpit, const Radius.circular(3));
-    
-    p.shader = const LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [Colors.white, Color(0xFF00E5FF)],
-      stops: [0.1, 0.9],
-    ).createShader(cockpit);
-    canvas.drawRRect(cockpitRRect, p);
-    p.shader = null;
-
-    // ── 6. Cannons (Weapon Mounts) ────────────────────────────────────────
-    final cannonL = Rect.fromLTWH(cx - 20, cy - 2, 2, 8);
-    final cannonR = Rect.fromLTWH(cx + 18, cy - 2, 2, 8);
-    p.color = const Color(0xFF1A1A1A);
-    canvas.drawRect(cannonL, p);
-    canvas.drawRect(cannonR, p);
-    
-    // Muzzle tips (Red)
-    p.color = const Color(0xFFFF1744);
-    canvas.drawCircle(Offset(cx - 19, cy - 2), 1.2, p);
-    canvas.drawCircle(Offset(cx + 19, cy - 2), 1.2, p);
-
-    // ── 7. Muzzle Flash (1-frame) ─────────────────────────────────────────
-    if (_showMuzzleFlash) {
-      _drawMuzzleFlash(canvas);
-    }
-
-    // ── 8. Glow overlays (BlendMode.plus) ─────────────────────────────────
-    if (_flashTimer > 0) {
-      _drawDamageFlash(canvas, wingPath, fuselage);
-    }
-  }
-
-  void _drawTwinThrusters(Canvas canvas, double cx, double cy, double speed) {
-    final intensity = (speed / _maxSpeed).clamp(0.0, 1.0);
-    final h = 12 + 20 * intensity + _thrusterJitter.abs();
-    final w = 4 + 2 * intensity;
-
-    _drawExhaust(canvas, Offset(cx - 4, size.y - 2), w, h, intensity);
-    _drawExhaust(canvas, Offset(cx + 4, size.y - 2), w, h, intensity);
-  }
-
-  void _drawExhaust(Canvas canvas, Offset top, double w, double h, double intensity) {
-    // Outer glow
-    final glow = Path()
-      ..moveTo(top.dx - w, top.dy)
-      ..lineTo(top.dx, top.dy + h)
-      ..lineTo(top.dx + w, top.dy)
+    // ── 2. Secondary Armor Plating (Middle Layer) ─────────────────────────
+    final armorPlating = Path()
+      ..moveTo(cx, 16)
+      ..lineTo(cx + 14, cy + 8)
+      ..lineTo(cx + 6, size.y - 10)
+      ..lineTo(cx - 6, size.y - 10)
+      ..lineTo(cx - 14, cy + 8)
       ..close();
+    
+    canvas.drawPath(armorPlating, _armorPaint);
 
-    canvas.drawPath(
-      glow,
-      Paint()
-        ..color = const Color(0xFF00E5FF).withValues(alpha: 0.4 * intensity)
-        ..blendMode = BlendMode.plus,
-    );
+    // ── 3. Detail Lines (Paneling) ───────────────────────────────────────
+    canvas.drawPath(deltaHull, _linePaint);
+    canvas.drawPath(armorPlating, _linePaint);
+    // Micro-accents on wings
+    canvas.drawLine(Offset(cx - 14, cy + 8), Offset(cx - 24, cy + 15), _linePaint);
+    canvas.drawLine(Offset(cx + 14, cy + 8), Offset(cx + 24, cy + 15), _linePaint);
 
-    // Core
-    final core = Path()
-      ..moveTo(top.dx - w * 0.4, top.dy)
-      ..lineTo(top.dx, top.dy + h * 0.6)
-      ..lineTo(top.dx + w * 0.4, top.dy)
-      ..close();
-
-    canvas.drawPath(
-      core,
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.8 * intensity)
-        ..blendMode = BlendMode.plus,
-    );
-  }
-
-  void _drawMuzzleFlash(Canvas canvas) {
-    canvas.drawCircle(
-      Offset(_currentMuzzlePos.x, _currentMuzzlePos.y),
-      8,
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.8)
-        ..blendMode = BlendMode.plus,
-    );
-    canvas.drawCircle(
-      Offset(_currentMuzzlePos.x, _currentMuzzlePos.y),
-      14,
-      Paint()
-        ..color = const Color(0xFF00E5FF).withValues(alpha: 0.3)
-        ..blendMode = BlendMode.plus,
-    );
-  }
-
-  void _drawDamageFlash(Canvas canvas, Path wings, Path fuselage) {
-    final a = (_flashTimer / _flashDuration).clamp(0.0, 1.0);
-    final p = Paint()
-      ..color = const Color(0xFFFF1744).withValues(alpha: 0.6 * a)
+    // ── 4. Neon Edge Strips (Cyan) ────────────────────────────────────────
+    final cyanEdge = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..color = const Color(0xFF00E5FF).withValues(alpha: 0.7)
       ..blendMode = BlendMode.plus;
     
-    canvas.drawPath(wings, p);
-    canvas.drawPath(fuselage, p);
+    // Front edges of wings
+    canvas.drawLine(Offset(cx, 8), Offset(cx + 26, cy + 16), cyanEdge);
+    canvas.drawLine(Offset(cx, 8), Offset(cx - 26, cy + 16), cyanEdge);
+
+    // ── 5. Magenta Accent Strips ──────────────────────────────────────────
+    final magentaStrip = Paint()..color = const Color(0xFFFF2D95);
+    canvas.drawRect(Rect.fromLTWH(cx - 18, cy + 12, 6, 2), magentaStrip);
+    canvas.drawRect(Rect.fromLTWH(cx + 12, cy + 12, 6, 2), magentaStrip);
+
+    // ── 6. Cockpit Canopy (Cyan Glow) ─────────────────────────────────────
+    final canopyRect = Rect.fromCenter(center: Offset(cx, cy - 4), width: 10, height: 18);
+    final canopyRRect = RRect.fromRectAndRadius(canopyRect, const Radius.circular(5));
+    
+    canvas.drawRRect(canopyRRect, Paint()..color = const Color(0xFF08121A));
+    canvas.drawRRect(canopyRRect, _cyanGlowPaint);
+    
+    // Internal canopy detail
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy - 8), width: 4, height: 6), const Radius.circular(2)),
+      Paint()..color = Colors.white.withValues(alpha: 0.3)
+    );
+
+    // ── 7. Rear Stabilizers ───────────────────────────────────────────────
+    final stabL = Path()
+      ..moveTo(cx - 6, size.y - 8)
+      ..lineTo(cx - 14, size.y)
+      ..lineTo(cx - 14, size.y - 4)
+      ..close();
+    final stabR = Path()
+      ..moveTo(cx + 6, size.y - 8)
+      ..lineTo(cx + 14, size.y)
+      ..lineTo(cx + 14, size.y - 4)
+      ..close();
+    
+    canvas.drawPath(stabL, _hullPaint);
+    canvas.drawPath(stabR, _hullPaint);
+    canvas.drawPath(stabL, _linePaint);
+    canvas.drawPath(stabR, _linePaint);
+
+    // ── 8. Muzzle Flash (Existing logic) ──────────────────────────────────
+    if (_showMuzzleFlash) {
+      _drawCyberMuzzleFlash(canvas);
+    }
+
+    // ── 9. Damage Flash ──────────────────────────────────────────────────
+    if (_flashTimer > 0) {
+      _drawDamageFlash(canvas, deltaHull);
+    }
+  }
+
+  void _drawCyberThrusters(Canvas canvas, double cx, double cy, double speed) {
+    final intensity = (speed / _maxSpeed).clamp(0.0, 1.0);
+    final h = 14 + 18 * intensity + _thrusterJitter.abs();
+    final w = 6 + 2 * intensity;
+
+    _drawExhaustCyber(canvas, Offset(cx - 7, size.y - 4), w, h, intensity);
+    _drawExhaustCyber(canvas, Offset(cx + 7, size.y - 4), w, h, intensity);
+  }
+
+  void _drawExhaustCyber(Canvas canvas, Offset top, double w, double h, double intensity) {
+    // 1. Magenta outer shimmer
+    final magentaShimmer = Path()
+      ..moveTo(top.dx - w, top.dy)
+      ..lineTo(top.dx, top.dy + h * 1.1)
+      ..lineTo(top.dx + w, top.dy)
+      ..close();
+    canvas.drawPath(magentaShimmer, _magentaGlowPaint..color = const Color(0xFFFF2D95).withValues(alpha: 0.2 * intensity));
+
+    // 2. Cyan outer glow
+    final glow = Path()
+      ..moveTo(top.dx - w * 0.8, top.dy)
+      ..lineTo(top.dx, top.dy + h)
+      ..lineTo(top.dx + w * 0.8, top.dy)
+      ..close();
+    canvas.drawPath(glow, _cyanGlowPaint..color = const Color(0xFF00E5FF).withValues(alpha: 0.4 * intensity));
+
+    // 3. Central bright core
+    final core = Path()
+      ..moveTo(top.dx - w * 0.3, top.dy)
+      ..lineTo(top.dx, top.dy + h * 0.5)
+      ..lineTo(top.dx + w * 0.3, top.dy)
+      ..close();
+    canvas.drawPath(core, Paint()..color = Colors.white.withValues(alpha: 0.8 * intensity)..blendMode = BlendMode.plus);
+  }
+
+  void _drawCyberMuzzleFlash(Canvas canvas) {
+    final pX = _currentMuzzlePos.x;
+    final pY = _currentMuzzlePos.y;
+    
+    canvas.drawCircle(Offset(pX, pY), 10, _cyanGlowPaint);
+    canvas.drawCircle(Offset(pX, pY), 5, Paint()..color = Colors.white..blendMode = BlendMode.plus);
+    
+    // Magenta spark
+    canvas.drawRect(Rect.fromCenter(center: Offset(pX, pY), width: 14, height: 1.5), _magentaGlowPaint);
+  }
+
+  void _drawDamageFlash(Canvas canvas, Path hull) {
+    final a = (_flashTimer / _flashDuration).clamp(0.0, 1.0);
+    canvas.drawPath(
+      hull,
+      Paint()
+        ..color = const Color(0xFFFF1744).withValues(alpha: 0.6 * a)
+        ..blendMode = BlendMode.plus,
+    );
   }
 }

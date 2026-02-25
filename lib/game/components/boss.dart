@@ -212,122 +212,163 @@ class Boss extends PositionComponent
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
+  // ── Render ───────────────────────────────────────────────────────────────────
+
+  static final Paint _hullPaint = Paint()..color = const Color(0xFF141821);
+  static final Paint _armorPaint = Paint()..color = const Color(0xFF1F2430);
+  static final Paint _cyanGlowPaint = Paint()
+    ..color = const Color(0xFF00E5FF).withValues(alpha: 0.5)
+    ..blendMode = BlendMode.plus;
+  static final Paint _magentaGlowPaint = Paint()
+    ..color = const Color(0xFFFF2D95).withValues(alpha: 0.6)
+    ..blendMode = BlendMode.plus;
+  static final Paint _linePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.0
+    ..color = Colors.white.withValues(alpha: 0.15);
+
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2;
     final cy = size.y / 2;
 
-    // Engine exhaust (multi-vent)
-    for (final ox in [-0.25, 0, 0.25]) {
-      canvas.drawPath(
-        Path()
-          ..moveTo(cx + size.x * ox - 10, size.y)
-          ..lineTo(cx + size.x * ox, size.y + 18)
-          ..lineTo(cx + size.x * ox + 10, size.y)
-          ..close(),
-        Paint()
-          ..color = const Color(0xFFFF1744).withValues(alpha: 0.7)
-          ..blendMode = BlendMode.plus,
-      );
+    // ── 1. Brutalist Broad Hull (Base Layer) ────────────────────────────
+    final hull = Path()
+      ..moveTo(cx, 10)                         // Nose
+      ..lineTo(size.x - 20, cy * 0.4)          // Outward shoulder R
+      ..lineTo(size.x, cy)                     // Far right tip
+      ..lineTo(size.x * 0.85, size.y)          // Rear R
+      ..lineTo(cx + 40, size.y - 15)           // Engine bay indent R
+      ..lineTo(cx, size.y - 5)                 // Central rear bay
+      ..lineTo(cx - 40, size.y - 15)           // Engine bay indent L
+      ..lineTo(size.x * 0.15, size.y)          // Rear L
+      ..lineTo(0, cy)                          // Far left tip
+      ..lineTo(20, cy * 0.4)                   // Outward shoulder L
+      ..close();
+    
+    canvas.drawPath(hull, _hullPaint);
+
+    // ── 2. Massive Armor Plating Layers ──────────────────────────────────
+    final centerPlate = Path()
+      ..moveTo(cx - 60, cy - 20)
+      ..lineTo(cx + 60, cy - 20)
+      ..lineTo(cx + 40, cy + 20)
+      ..lineTo(cx - 40, cy + 20)
+      ..close();
+    canvas.drawPath(centerPlate, _armorPaint);
+
+    final wingPlateR = Path()
+      ..moveTo(cx + 70, cy - 10)
+      ..lineTo(size.x - 20, cy + 5)
+      ..lineTo(size.x - 40, cy + 25)
+      ..lineTo(cx + 60, cy + 15)
+      ..close();
+    canvas.drawPath(wingPlateR, _armorPaint);
+
+    final wingPlateL = Path()
+      ..moveTo(cx - 70, cy - 10)
+      ..lineTo(20, cy + 5)
+      ..lineTo(40, cy + 25)
+      ..lineTo(cx - 60, cy + 15)
+      ..close();
+    canvas.drawPath(wingPlateL, _armorPaint);
+
+    // ── 3. Cyan Energy Veins & Pulse ─────────────────────────────────────
+    final vPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..color = const Color(0xFF00E5FF).withValues(alpha: 0.45)
+      ..blendMode = BlendMode.plus;
+    
+    canvas.drawPath(
+      Path()
+        ..moveTo(cx, 20)
+        ..lineTo(cx - 80, cy - 5)
+        ..moveTo(cx, 20)
+        ..lineTo(cx + 80, cy - 5),
+      vPaint,
+    );
+
+    final pulseT = (sin(_oscillationPhase * 2.0) + 1) / 2;
+    canvas.drawCircle(Offset(cx - 80 * pulseT, 20 + (cy - 25) * pulseT), 3, _cyanGlowPaint..color = const Color(0xFF00E5FF).withValues(alpha: 0.7 * pulseT));
+    canvas.drawCircle(Offset(cx + 80 * pulseT, 20 + (cy - 25) * pulseT), 3, _cyanGlowPaint);
+
+    // ── 4. Pulsing Magenta Power Reactor ──────────────────────────────────
+    final coreAlpha = 0.6 + 0.3 * sin(_oscillationPhase * 3.0);
+    final coreSize = 36.0 + 6.0 * sin(_oscillationPhase * 3.0);
+    final coreRect = Rect.fromCenter(center: Offset(cx, cy), width: coreSize, height: coreSize);
+    
+    canvas.drawOval(coreRect, Paint()..color = const Color(0xFF0D0204));
+    canvas.drawOval(coreRect, _magentaGlowPaint..color = const Color(0xFFFF2D95).withValues(alpha: coreAlpha));
+    canvas.drawCircle(Offset(cx, cy), coreSize * 0.45, Paint()..color = Colors.white.withValues(alpha: 0.75)..blendMode = BlendMode.plus);
+
+    // ── 5. Weapon Port Glow (Cyan) ────────────────────────────────────────
+    for (final ox in _gunPorts(cx)) {
+      final lx = ox - position.x + cx;
+      canvas.drawRect(Rect.fromLTWH(lx - 5, cy - 15, 10, 3), _cyanGlowPaint);
     }
 
-    // Main hull — heavy angular layered body
-    final hullPaint = Paint()..color = const Color(0xFF1A0608);
-    canvas.drawPath(
-      Path()
-        ..moveTo(cx, 0)                             // Nose
-        ..lineTo(cx + size.x * 0.45, cy * 0.4)
-        ..lineTo(size.x, cy)                         // Right wing
-        ..lineTo(cx + size.x * 0.38, cy + 12)
-        ..lineTo(cx + size.x * 0.28, size.y)
-        ..lineTo(cx, cy * 1.7)
-        ..lineTo(cx - size.x * 0.28, size.y)
-        ..lineTo(cx - size.x * 0.38, cy + 12)
-        ..lineTo(0, cy)                              // Left wing
-        ..lineTo(cx - size.x * 0.45, cy * 0.4)
-        ..close(),
-      hullPaint,
-    );
+    // ── 6. Engine Exhausts (Heavy Multi-Vent) ─────────────────────────────
+    for (final xOff in [-80.0, -40.0, 40.0, 80.0]) {
+      _drawCyberExhaustSingle(canvas, Offset(cx + xOff, size.y - 15), 16, 24, const Color(0xFFFF2D95));
+    }
 
-    // Armor plate highlights
-    canvas.drawPath(
-      Path()
-        ..moveTo(cx - 30, cy - 8)
-        ..lineTo(cx + 30, cy - 8)
-        ..lineTo(cx + 24, cy + 8)
-        ..lineTo(cx - 24, cy + 8)
-        ..close(),
-      Paint()..color = const Color(0xFF2D0A12),
-    );
-    // Wing plates
-    canvas.drawPath(
-      Path()
-        ..moveTo(cx + size.x * 0.2, cy - 4)
-        ..lineTo(cx + size.x * 0.42, cy + 2)
-        ..lineTo(cx + size.x * 0.35, cy + 18)
-        ..lineTo(cx + size.x * 0.2, cy + 12)
-        ..close(),
-      Paint()..color = const Color(0xFF2D0A12),
-    );
-    canvas.drawPath(
-      Path()
-        ..moveTo(cx - size.x * 0.2, cy - 4)
-        ..lineTo(cx - size.x * 0.42, cy + 2)
-        ..lineTo(cx - size.x * 0.35, cy + 18)
-        ..lineTo(cx - size.x * 0.2, cy + 12)
-        ..close(),
-      Paint()..color = const Color(0xFF2D0A12),
-    );
+    // ── 7. Detail Lines ──────────────────────────────────────────────────
+    canvas.drawPath(hull, _linePaint);
+    canvas.drawPath(centerPlate, _linePaint);
+    canvas.drawPath(wingPlateR, _linePaint);
+    canvas.drawPath(wingPlateL, _linePaint);
 
-    // Central red reactor core
-    final coreRect = Rect.fromCenter(center: Offset(cx, cy), width: 32, height: 32);
-    canvas.drawOval(
-      coreRect,
+    // ── 8. HP Bar ────────────────────────────────────────────────────────
+    _drawHpBar(canvas);
+  }
+
+  void _drawCyberExhaustSingle(Canvas canvas, Offset top, double w, double h, Color baseColor) {
+    final glow = Path()
+      ..moveTo(top.dx - w / 2, top.dy)
+      ..lineTo(top.dx, top.dy + h)
+      ..lineTo(top.dx + w / 2, top.dy)
+      ..close();
+
+    canvas.drawPath(
+      glow,
       Paint()
-        ..shader = const RadialGradient(
-          colors: [Colors.white, Color(0xFFFF1744), Color(0x00FF1744)],
-          stops: [0.0, 0.3, 1.0],
-        ).createShader(coreRect),
-    );
-    canvas.drawCircle(
-      Offset(cx, cy), 28,
-      Paint()
-        ..color = const Color(0xFFFF1744).withValues(alpha: 0.5)
+        ..color = baseColor.withValues(alpha: 0.4)
         ..blendMode = BlendMode.plus,
     );
 
-    // Gun turret protrusions
-    final turretPaint = Paint()..color = const Color(0xFF0D0305);
-    for (final ox in _gunPorts(cx)) {
-      final lx = ox - position.x + cx;
-      canvas.drawRect(Rect.fromLTWH(lx - 4, cy - 10, 8, 18), turretPaint);
-      canvas.drawCircle(Offset(lx, cy - 10), 4, turretPaint);
-    }
+    final core = Path()
+      ..moveTo(top.dx - w * 0.2, top.dy)
+      ..lineTo(top.dx, top.dy + h * 0.5)
+      ..lineTo(top.dx + w * 0.2, top.dy)
+      ..close();
 
-    // Missile pod protrusions
-    final podPaint = Paint()..color = const Color(0xFF0D0305);
-    for (final ox in _missilePodOffsets()) {
-      final lx = ox + cx;
-      canvas.drawRect(Rect.fromLTWH(lx - 7, cy + 4, 14, 10), podPaint);
-    }
+    canvas.drawPath(
+      core,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.7)
+        ..blendMode = BlendMode.plus,
+    );
+  }
 
-    // HP bar (always shown on boss)
+  void _drawHpBar(Canvas canvas) {
     final ratio  = (hp / _maxHp).clamp(0.0, 1.0);
     final barW   = size.x * 0.9;
     final startX = (size.x - barW) / 2;
     canvas.drawRect(Rect.fromLTWH(startX, -16, barW, 6), Paint()..color = Colors.black54);
+    
+    // HP transitions from cyan/green to red-magenta
+    final hpColor = Color.lerp(const Color(0xFFFF2D95), const Color(0xFF00E5FF), ratio)!;
+    
     canvas.drawRect(
       Rect.fromLTWH(startX, -16, barW * ratio, 6),
-      Paint()..color = Color.lerp(const Color(0xFFFF1744), const Color(0xFF00FF88), ratio)!,
+      Paint()..color = hpColor,
     );
 
     // HP bar border
     canvas.drawRect(
       Rect.fromLTWH(startX, -16, barW, 6),
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.2)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
+      _linePaint,
     );
   }
 }

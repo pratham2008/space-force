@@ -229,99 +229,123 @@ class MissileShip extends PositionComponent
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
+  // ── Render ───────────────────────────────────────────────────────────────────
+
+  static final Paint _hullPaint = Paint()..color = const Color(0xFF141821);
+  static final Paint _armorPaint = Paint()..color = const Color(0xFF1F2430);
+  static final Paint _cyanGlowPaint = Paint()
+    ..color = const Color(0xFF00E5FF).withValues(alpha: 0.5)
+    ..blendMode = BlendMode.plus;
+  static final Paint _magentaGlowPaint = Paint()
+    ..color = const Color(0xFFFF2D95).withValues(alpha: 0.6)
+    ..blendMode = BlendMode.plus;
+  static final Paint _linePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.0
+    ..color = Colors.white.withValues(alpha: 0.15);
+
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2;
     final cy = size.y / 2;
 
-    // Engine exhaust
-    canvas.drawPath(
-      Path()
-        ..moveTo(cx - 7, size.y)
-        ..lineTo(cx, size.y + 14)
-        ..lineTo(cx + 7, size.y)
-        ..close(),
-      Paint()
-        ..color = const Color(0xFFFF6D00)
-            .withValues(alpha: _shipState == _MissileShipState.aggressive ? 0.9 : 0.6)
-        ..blendMode = BlendMode.plus,
-    );
+    // ── 1. Sharp Triangular Hull (Base Layer) ───────────────────────────
+    final noseHull = Path()
+      ..moveTo(cx, 0)                         // Forward extended nose
+      ..lineTo(cx + 28, size.y - 10)           // Right wing tip
+      ..lineTo(cx + 12, size.y)                // Right rear
+      ..lineTo(cx - 12, size.y)                // Left rear
+      ..lineTo(cx - 28, size.y - 10)           // Left wing tip
+      ..close();
+    
+    canvas.drawPath(noseHull, _hullPaint);
 
-    // Main fuselage
-    canvas.drawPath(
-      Path()
-        ..moveTo(cx, 0)             // Sharp nose
-        ..lineTo(cx + 8, cy + 6)
-        ..lineTo(cx + 6, size.y)
-        ..lineTo(cx - 6, size.y)
-        ..lineTo(cx - 8, cy + 6)
-        ..close(),
-      Paint()..color = const Color(0xFF3D1A00),
-    );
+    // ── 2. Top Armor Layer ──────────────────────────────────────────────
+    final armor = Path()
+      ..moveTo(cx, 12)
+      ..lineTo(cx + 12, cy)
+      ..lineTo(cx, cy + 8)
+      ..lineTo(cx - 12, cy)
+      ..close();
+    canvas.drawPath(armor, _armorPaint);
 
-    // Swept wings
-    final wingPaint = Paint()..color = const Color(0xFF4A2209);
-    // Left
-    canvas.drawPath(
-      Path()
-        ..moveTo(cx - 6, cy)
-        ..lineTo(0, cy + 6)
-        ..lineTo(cx - 6, cy + 16)
-        ..close(),
-      wingPaint,
-    );
-    // Right
-    canvas.drawPath(
-      Path()
-        ..moveTo(cx + 6, cy)
-        ..lineTo(size.x, cy + 6)
-        ..lineTo(cx + 6, cy + 16)
-        ..close(),
-      wingPaint,
-    );
+    // ── 3. Underslung Missile Rails (Magenta) ────────────────────────────
+    final railPaint = Paint()..color = const Color(0xFF0D0508);
+    canvas.drawRect(Rect.fromLTWH(cx - 22, cy + 4, 12, 4), railPaint);
+    canvas.drawRect(Rect.fromLTWH(cx + 10, cy + 4, 12, 4), railPaint);
+    
+    // Magenta pod glow
+    canvas.drawRect(Rect.fromLTWH(cx - 20, cy + 5, 8, 2), _magentaGlowPaint);
+    canvas.drawRect(Rect.fromLTWH(cx + 12, cy + 5, 8, 2), _magentaGlowPaint);
 
-    // Missile pods under wings
-    final podPaint = Paint()..color = const Color(0xFF1A0A00);
-    canvas.drawRect(Rect.fromLTWH(6, cy + 4, 10, 6), podPaint);
-    canvas.drawRect(Rect.fromLTWH(size.x - 16, cy + 4, 10, 6), podPaint);
+    // ── 4. Cyan Engine Glow ──────────────────────────────────────────────
+    _drawCyberExhaustSingle(canvas, Offset(cx, size.y - 4), 10, 16, const Color(0xFF00E5FF));
 
-    // Orange/red tip lights
-    final tipPaint = Paint()
-      ..color = const Color(0xFFFF6D00)
-      ..blendMode = BlendMode.plus;
-    canvas.drawCircle(Offset(8, cy + 7), 2, tipPaint);
-    canvas.drawCircle(Offset(size.x - 8, cy + 7), 2, tipPaint);
-
-    // Core glow (pulses brighter in aggressive mode)
-    canvas.drawCircle(
-      Offset(cx, cy), 8,
-      Paint()
-        ..color = const Color(0xFFFF6D00)
-            .withValues(alpha: _shipState == _MissileShipState.aggressive ? 0.8 : 0.5)
-        ..blendMode = BlendMode.plus,
-    );
-
-    // Rim light
-    canvas.drawPath(
-      Path()
-        ..moveTo(cx - 8, cy - 2)
-        ..lineTo(cx, 4),
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.3)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.0
-        ..blendMode = BlendMode.plus,
-    );
-
-    // HP bar
-    final maxHp = 3 + (wave * 0.5).floor();
-    if (hp < maxHp) {
-      final ratio  = (hp / maxHp).clamp(0.0, 1.0);
-      final barW   = size.x * 0.8;
-      final startX = (size.x - barW) / 2;
-      canvas.drawRect(Rect.fromLTWH(startX, -10, barW, 3), Paint()..color = Colors.black26);
-      canvas.drawRect(Rect.fromLTWH(startX, -10, barW * ratio, 3),
-          Paint()..color = const Color(0xFFFF6D00));
+    // ── 5. Blinking Magenta Tip Light ────────────────────────────────────
+    // Use _oscillationPhase for consistent per-ship blinking
+    final blink = (sin(_oscillationPhase * 4.0) > 0);
+    if (blink) {
+      canvas.drawCircle(Offset(cx, 4), 2, _magentaGlowPaint);
     }
+
+    // ── 6. Subtle Animated Light Strip ───────────────────────────────────
+    final stripT = (sin(_oscillationPhase * 0.8) + 1) / 2; // 0..1
+    final stripX = cx - 10 + 20 * stripT;
+    canvas.drawRect(Rect.fromLTWH(stripX - 2, cy - 2, 4, 1), _cyanGlowPaint);
+
+    // ── 7. Detail lines ──────────────────────────────────────────────────
+    canvas.drawPath(noseHull, _linePaint);
+    canvas.drawPath(armor, _linePaint);
+
+    _drawHpBar(canvas);
+  }
+
+  void _drawCyberExhaustSingle(Canvas canvas, Offset top, double w, double h, Color baseColor) {
+    final speedFactor = _shipState == _MissileShipState.aggressive ? 1.5 : 1.0;
+    final finalH = h * speedFactor;
+    
+    final glow = Path()
+      ..moveTo(top.dx - w / 2, top.dy)
+      ..lineTo(top.dx, top.dy + finalH)
+      ..lineTo(top.dx + w / 2, top.dy)
+      ..close();
+
+    canvas.drawPath(
+      glow,
+      Paint()
+        ..color = baseColor.withValues(alpha: 0.4)
+        ..blendMode = BlendMode.plus,
+    );
+
+    final core = Path()
+      ..moveTo(top.dx - w * 0.2, top.dy)
+      ..lineTo(top.dx, top.dy + finalH * 0.5)
+      ..lineTo(top.dx + w * 0.2, top.dy)
+      ..close();
+
+    canvas.drawPath(
+      core,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.7)
+        ..blendMode = BlendMode.plus,
+    );
+  }
+
+  void _drawHpBar(Canvas canvas) {
+    final maxHp = 3 + (wave * 0.5).floor();
+    if (hp >= maxHp) return;
+
+    final ratio  = (hp / maxHp).clamp(0.0, 1.0);
+    final barW   = size.x * 0.8;
+    final startX = (size.x - barW) / 2;
+
+    canvas.drawRect(
+      Rect.fromLTWH(startX, -10, barW, 3),
+      Paint()..color = Colors.black26,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(startX, -10, barW * ratio, 3),
+      Paint()..color = const Color(0xFFFF2D95),
+    );
   }
 }

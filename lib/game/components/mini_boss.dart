@@ -159,82 +159,146 @@ class MiniBoss extends PositionComponent
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  static final Paint _hullPaint = Paint()..color = const Color(0xFF141821);
+  static final Paint _armorPaint = Paint()..color = const Color(0xFF1F2430);
+  static final Paint _cyanGlowPaint = Paint()
+    ..color = const Color(0xFF00E5FF).withValues(alpha: 0.5)
+    ..blendMode = BlendMode.plus;
+  static final Paint _magentaGlowPaint = Paint()
+    ..color = const Color(0xFFFF2D95).withValues(alpha: 0.6)
+    ..blendMode = BlendMode.plus;
+  static final Paint _linePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.0
+    ..color = Colors.white.withValues(alpha: 0.15);
+
   @override
   void render(Canvas canvas) {
     final cx = size.x / 2;
     final cy = size.y / 2;
 
-    // ── Engine exhaust ────────────────────────────────────────────────────────
-    canvas.drawPath(
-      Path()
-        ..moveTo(cx - 14, size.y)
-        ..lineTo(cx, size.y + 20)
-        ..lineTo(cx + 14, size.y)
-        ..close(),
-      Paint()
-        ..color = const Color(0xFFFF1744).withValues(alpha: 0.6)
-        ..blendMode = BlendMode.plus,
-    );
-
-    // ── Hull (wider asymmetric shape) ─────────────────────────────────────────
+    // ── 1. Brutalist Angular Hull (Base Layer) ──────────────────────────
     final hull = Path()
-      ..moveTo(cx, 0)               // Nose
-      ..lineTo(cx + cx * 0.6, cy * 0.5)
-      ..lineTo(size.x, cy)          // Right wing
-      ..lineTo(cx + cx * 0.5, cy + 8)
-      ..lineTo(cx + cx * 0.3, size.y)
-      ..lineTo(cx, cy * 1.6)
-      ..lineTo(cx - cx * 0.3, size.y)
-      ..lineTo(cx - cx * 0.5, cy + 8)
-      ..lineTo(0, cy)               // Left wing
-      ..lineTo(cx - cx * 0.6, cy * 0.5)
+      ..moveTo(cx, 0)                         // Nose
+      ..lineTo(cx + cx * 0.75, cy * 0.5)      // Top shoulder R
+      ..lineTo(size.x, cy)                    // Wing tip R
+      ..lineTo(cx + cx, size.y)               // Rear flare R
+      ..lineTo(cx + cx * 0.3, size.y - 10)    // Rear inner R
+      ..lineTo(cx, size.y - 20)               // Engine bay
+      ..lineTo(cx - cx * 0.3, size.y - 10)    // Rear inner L
+      ..lineTo(cx - cx, size.y)               // Rear flare L
+      ..lineTo(0, cy)                         // Wing tip L
+      ..lineTo(cx - cx * 0.75, cy * 0.5)      // Top shoulder L
+      ..close();
+    
+    canvas.drawPath(hull, _hullPaint);
+
+    // ── 2. Multi-Layer Armor Plating ─────────────────────────────────────
+    final armor1 = Path()
+      ..moveTo(cx, 15)
+      ..lineTo(cx + 40, cy)
+      ..lineTo(cx, cy + 15)
+      ..lineTo(cx - 40, cy)
+      ..close();
+    canvas.drawPath(armor1, _armorPaint);
+
+    final armor2 = Path()
+      ..moveTo(cx - 30, cy + 20)
+      ..lineTo(cx + 30, cy + 20)
+      ..lineTo(cx + 20, size.y - 15)
+      ..lineTo(cx - 20, size.y - 15)
+      ..close();
+    canvas.drawPath(armor2, _armorPaint);
+
+    // ── 3. HP bar (Moved up for clarity) ─────────────────────────────────
+    _drawHpBar(canvas);
+
+    // ── 4. Cyan Energy Veins (Branching) ─────────────────────────────────
+    final vPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..color = const Color(0xFF00E5FF).withValues(alpha: 0.4)
+      ..blendMode = BlendMode.plus;
+    
+    // Main veins
+    canvas.drawLine(Offset(cx, 10), Offset(cx - 25, cy - 10), vPaint);
+    canvas.drawLine(Offset(cx, 10), Offset(cx + 25, cy - 10), vPaint);
+    canvas.drawLine(Offset(cx - 25, cy - 10), Offset(cx - 50, cy + 10), vPaint);
+    canvas.drawLine(Offset(cx + 25, cy - 10), Offset(cx + 50, cy + 10), vPaint);
+
+    // Animated pulse along veins
+    final pulseT = (sin(_oscillationPhase * 2.5) + 1) / 2;
+    final pulsePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..color = const Color(0xFF00E5FF).withValues(alpha: 0.6 * pulseT)
+      ..blendMode = BlendMode.plus;
+    
+    canvas.drawCircle(Offset(cx - 25 + 25 * pulseT, cy - 10 - 20 * pulseT), 2, pulsePaint);
+    canvas.drawCircle(Offset(cx + 25 - 25 * pulseT, cy - 10 - 20 * pulseT), 2, pulsePaint);
+
+    // ── 5. Magenta Power Core (Pulsing) ──────────────────────────────────
+    final coreAlpha = 0.5 + 0.3 * sin(_oscillationPhase * 2.0);
+    final coreSize = 24.0 + 4.0 * sin(_oscillationPhase * 2.0);
+    final coreRect = Rect.fromCenter(center: Offset(cx, cy), width: coreSize, height: coreSize);
+    
+    canvas.drawOval(coreRect, Paint()..color = const Color(0xFF0D0204));
+    canvas.drawOval(coreRect, _magentaGlowPaint..color = const Color(0xFFFF2D95).withValues(alpha: coreAlpha));
+    canvas.drawCircle(Offset(cx, cy), coreSize * 0.4, Paint()..color = Colors.white.withValues(alpha: 0.6)..blendMode = BlendMode.plus);
+
+    // ── 6. Weapon Mount Glow ─────────────────────────────────────────────
+    final gunX = size.x * 0.35;
+    canvas.drawRect(Rect.fromLTWH(cx - gunX - 4, cy - 5, 8, 2), _cyanGlowPaint);
+    canvas.drawRect(Rect.fromLTWH(cx + gunX - 4, cy - 5, 8, 2), _cyanGlowPaint);
+
+    // ── 7. Engine Exhausts ──────────────────────────────────────────────
+    _drawCyberExhaustSingle(canvas, Offset(cx - 20, size.y - 12), 12, 18, const Color(0xFFFF2D95));
+    _drawCyberExhaustSingle(canvas, Offset(cx + 20, size.y - 12), 12, 18, const Color(0xFFFF2D95));
+
+    // ── 8. Detail Paneling ──────────────────────────────────────────────
+    canvas.drawPath(hull, _linePaint);
+    canvas.drawPath(armor1, _linePaint);
+    canvas.drawPath(armor2, _linePaint);
+  }
+
+  void _drawCyberExhaustSingle(Canvas canvas, Offset top, double w, double h, Color baseColor) {
+    final glow = Path()
+      ..moveTo(top.dx - w / 2, top.dy)
+      ..lineTo(top.dx, top.dy + h)
+      ..lineTo(top.dx + w / 2, top.dy)
       ..close();
 
-    canvas.drawPath(hull, Paint()..color = const Color(0xFF3B0A11));
-
-    // ── Armor plate highlights ────────────────────────────────────────────────
     canvas.drawPath(
-      Path()
-        ..moveTo(cx, 4)
-        ..lineTo(cx + 16, cy * 0.6)
-        ..lineTo(cx - 16, cy * 0.6)
-        ..close(),
-      Paint()..color = const Color(0xFF6B1423),
-    );
-
-    // ── Red core glow ─────────────────────────────────────────────────────────
-    final coreRect = Rect.fromCenter(center: Offset(cx, cy), width: 20, height: 20);
-    canvas.drawOval(
-      coreRect,
+      glow,
       Paint()
-        ..shader = const RadialGradient(
-          colors: [Colors.white, Color(0xFFFF1744), Color(0x00FF1744)],
-          stops: [0.0, 0.35, 1.0],
-        ).createShader(coreRect),
-    );
-    canvas.drawCircle(
-      Offset(cx, cy), 20,
-      Paint()
-        ..color = const Color(0xFFFF1744).withValues(alpha: 0.6)
+        ..color = baseColor.withValues(alpha: 0.4)
         ..blendMode = BlendMode.plus,
     );
 
-    // ── Weapon mounts (2 guns + 1 missile port) ───────────────────────────────
-    final mountPaint = Paint()..color = const Color(0xFF1A0608);
-    final gunOffsetX = cx * 0.7;
-    canvas.drawRect(Rect.fromLTWH(cx - gunOffsetX - 3, cy - 8, 6, 14), mountPaint);
-    canvas.drawRect(Rect.fromLTWH(cx + gunOffsetX - 3, cy - 8, 6, 14), mountPaint);
-    // Central missile port
-    canvas.drawRect(Rect.fromLTWH(cx - 5, cy + 4, 10, 8), mountPaint);
+    final core = Path()
+      ..moveTo(top.dx - w * 0.2, top.dy)
+      ..lineTo(top.dx, top.dy + h * 0.5)
+      ..lineTo(top.dx + w * 0.2, top.dy)
+      ..close();
 
-    // ── HP bar ───────────────────────────────────────────────────────────────
+    canvas.drawPath(
+      core,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.7)
+        ..blendMode = BlendMode.plus,
+    );
+  }
+
+  void _drawHpBar(Canvas canvas) {
     final maxHp = _maxHp();
     final ratio  = (hp / maxHp).clamp(0.0, 1.0);
     final barW   = size.x * 0.85;
     final startX = (size.x - barW) / 2;
     canvas.drawRect(Rect.fromLTWH(startX, -12, barW, 4), Paint()..color = Colors.black45);
     canvas.drawRect(Rect.fromLTWH(startX, -12, barW * ratio, 4),
-        Paint()..color = const Color(0xFFFF1744));
+        Paint()..color = const Color(0xFFFF2D95));
   }
 
   int _maxHp() {
