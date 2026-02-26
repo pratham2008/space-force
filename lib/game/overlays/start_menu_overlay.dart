@@ -366,6 +366,7 @@ class _StartMenuOverlayState extends State<StartMenuOverlay>
                   size: 32,
                 ),
                 onPressed: () async {
+                  AudioManager.instance.playSfx('button.wav');
                   await AudioManager.instance.toggleMute();
                   setState(() {
                     _isSoundOn = !AudioManager.instance.isMuted;

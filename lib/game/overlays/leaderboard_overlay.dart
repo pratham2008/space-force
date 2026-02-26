@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../audio/audio_manager.dart';
 import '../services/auth_service.dart';
 import '../services/leaderboard_service.dart';
 import '../zero_vector_game.dart';
@@ -77,6 +78,7 @@ class _LeaderboardOverlayState extends State<LeaderboardOverlay> {
                   children: [
                     IconButton(
                       onPressed: () {
+                        AudioManager.instance.playSfx('button.wav');
                         widget.game.overlays.remove(Overlays.leaderboard);
                         if (widget.game.state == GameState.paused) {
                           widget.game.resumeEngine();
@@ -243,7 +245,10 @@ class _ActionBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onPressed,
+      onTap: () {
+        AudioManager.instance.playSfx('button.wav');
+        onPressed();
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(

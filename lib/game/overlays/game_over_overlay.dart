@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../audio/audio_manager.dart';
 import '../zero_vector_game.dart';
 import '../services/auth_service.dart';
 import '../services/leaderboard_service.dart';
@@ -208,7 +209,10 @@ class _MenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onPressed,
+      onTap: () {
+        AudioManager.instance.playSfx('button.wav');
+        onPressed();
+      },
       child: Container(
         width: 240,
         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -256,7 +260,10 @@ class _SmallButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onPressed,
+      onTap: () {
+        AudioManager.instance.playSfx('button.wav');
+        onPressed();
+      },
       child: Text(
         label,
         style: TextStyle(

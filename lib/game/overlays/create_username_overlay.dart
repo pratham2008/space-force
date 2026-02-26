@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../audio/audio_manager.dart';
 import '../services/auth_service.dart';
 import '../services/leaderboard_service.dart';
 import '../zero_vector_game.dart';
@@ -207,7 +208,10 @@ class _SmallActionBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: active ? onPressed : null,
+      onTap: active ? () {
+        AudioManager.instance.playSfx('button.wav');
+        onPressed();
+      } : null,
       child: AnimatedOpacity(
         duration: const Duration(milliseconds: 200),
         opacity: active ? 1.0 : 0.3,

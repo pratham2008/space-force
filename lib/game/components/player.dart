@@ -21,13 +21,11 @@ class Player extends PositionComponent
   // ── Dimensions ───────────────────────────────────────────────────────────────
   static const double _size = 56.0; // Slightly larger for detail
 
-  // ── Inertia movement ─────────────────────────────────────────────────────────
-  final Vector2 _velocity = Vector2.zero();
-  static const double _acceleration = 1200.0;
-  static const double _maxSpeed     = 460.0;
-  static const double _friction     = 8.0;
-
-  final Vector2 _dragDelta = Vector2.zero();
+  // ── Direct movement ──────────────────────────────────────────────────────────
+  double _dragX        = 0;    // horizontal drag delta this frame (for tilt)
+  double _dragLen      = 0;    // drag magnitude this frame (for thruster render)
+  double _renderSpeed  = 0;    // set in update from _dragLen, consumed by render
+  static const double _maxSpeed = 460.0; // render normalisation only
 
   // ── Tilt ─────────────────────────────────────────────────────────────────────
   static const double _maxTilt = 0.28; // ±16°
@@ -64,47 +62,26 @@ class Player extends PositionComponent
 
   @override
   void onDragUpdate(DragUpdateEvent event) {
-    _dragDelta.add(event.localDelta);
+    position.add(event.localDelta);
+    _dragX   = event.localDelta.x;
+    _dragLen = event.localDelta.length;
   }
 
   @override
   void update(double dt) {
     super.update(dt);
 
-    if (_dragDelta.length > 0) {
-      _velocity.add(_dragDelta * _acceleration * dt);
-      _dragDelta.setZero();
-    }
-
-    _velocity.scale(1.0 / (1.0 + _friction * dt));
-
-    if (_velocity.length > _maxSpeed) {
-      _velocity.normalize();
-      _velocity.scale(_maxSpeed);
-    }
-
-    position.add(_velocity * dt);
-
     final minY = game.size.y * 0.55;
     final hw   = _size / 2;
-    if (position.x < hw) {
-      position.x = hw;
-      if (_velocity.x < 0) _velocity.x = 0;
-    }
-    if (position.x > game.size.x - hw) {
-      position.x = game.size.x - hw;
-      if (_velocity.x > 0) _velocity.x = 0;
-    }
-    if (position.y < minY) {
-      position.y = minY;
-      if (_velocity.y < 0) _velocity.y = 0;
-    }
-    if (position.y > game.size.y - hw) {
-      position.y = game.size.y - hw;
-      if (_velocity.y > 0) _velocity.y = 0;
-    }
+    if (position.x < hw)               position.x = hw;
+    if (position.x > game.size.x - hw) position.x = game.size.x - hw;
+    if (position.y < minY)             position.y = minY;
+    if (position.y > game.size.y - hw) position.y = game.size.y - hw;
 
-    angle = (_velocity.x / _maxSpeed).clamp(-1.0, 1.0) * _maxTilt;
+    angle        = (_dragX / 15.0).clamp(-1.0, 1.0) * _maxTilt;
+    _renderSpeed = _dragLen * 30.0;
+    _dragX       = 0;
+    _dragLen     = 0;
 
     _thrusterJitterTimer += dt;
     if (_thrusterJitterTimer >= _thrusterJitterRate) {
@@ -197,9 +174,8 @@ class Player extends PositionComponent
     final cx = size.x / 2;
     final cy = size.y / 2;
 
-    final speed = _velocity.length;
-    if (speed > 10) {
-      _drawCyberThrusters(canvas, cx, cy, speed);
+    if (_renderSpeed > 10) {
+      _drawCyberThrusters(canvas, cx, cy, _renderSpeed);
     }
 
     // ── 1. Base Delta Hull (Lower Layer) ──────────────────────────────────

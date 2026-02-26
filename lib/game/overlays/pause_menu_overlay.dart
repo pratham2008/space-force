@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../audio/audio_manager.dart';
 import '../zero_vector_game.dart';
 import 'common/overlay_anim_container.dart';
 
@@ -117,7 +118,10 @@ class _PauseButton extends StatelessWidget {
     if (isWarning) color = const Color(0xFFFF1744).withValues(alpha: 0.7);
 
     return GestureDetector(
-      onTap: onPressed,
+      onTap: () {
+        AudioManager.instance.playSfx('button.wav');
+        onPressed();
+      },
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 14),

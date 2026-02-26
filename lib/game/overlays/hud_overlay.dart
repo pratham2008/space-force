@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../audio/audio_manager.dart';
 import '../zero_vector_game.dart';
 import 'common/overlay_anim_container.dart';
 
@@ -97,7 +98,10 @@ class _HudOverlayState extends State<HudOverlay> with TickerProviderStateMixin {
                   isCenter: true,
                 ),
                 IconButton(
-                  onPressed: widget.game.pauseGame,
+                  onPressed: () {
+                    AudioManager.instance.playSfx('button.wav');
+                    widget.game.pauseGame();
+                  },
                   icon: const Icon(Icons.pause_rounded, color: Colors.white, size: 28),
                 ),
               ],
