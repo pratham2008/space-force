@@ -75,14 +75,32 @@ class EnemySpawnManager extends Component
   }
 
   void _spawnEnemyImpl({required bool aggressive}) {
-    final x = _random.nextDouble() * game.size.x;
+    double x = _random.nextDouble() * game.size.x;
+    
+    // ── De-clumping logic ──────────────────────────────────────────────────
+    // Ensure min 100px from other enemies, max 3 in 150px range.
+    for (int i = 0; i < 5; i++) {
+      final nearby = game.children.whereType<PositionComponent>().where((c) {
+        if (c is! Enemy && c is! MissileShip) return false;
+        return (c.position.x - x).abs() < 100;
+      }).length;
+      
+      final clustering = game.children.whereType<PositionComponent>().where((c) {
+        if (c is! Enemy && c is! MissileShip) return false;
+        return (c.position.x - x).abs() < 150;
+      }).length;
+
+      if (nearby == 0 && clustering < 3) break; // Perfect spot
+      x = _random.nextDouble() * game.size.x; // Retry
+    }
+
     final w = game.wave;
+    final spawnPos = Vector2(x, -30);
 
     // ── Missile Ship injection (part of budget, Wave 8+) ─────────────────────
-    // Determine how many MissileShips should appear this wave
     if (w >= 8 && _shouldSpawnMissileShip()) {
       game.add(MissileShip(
-        position: Vector2(x, -30),
+        position: spawnPos,
         wave: w,
         hp: 3 + (w * 0.5).floor(),
         baseSpeed: (80 + w * 5.0).clamp(80, 150).toDouble(),
@@ -102,7 +120,7 @@ class EnemySpawnManager extends Component
 
     game.add(
       Enemy(
-        position: Vector2(x, -20),
+        position: spawnPos,
         type: type,
         baseSpeed: _calculateEnemySpeed(),
         scoreValue: type == EnemyType.assault ? 25 : 10,

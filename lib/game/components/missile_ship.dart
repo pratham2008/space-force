@@ -166,7 +166,7 @@ class MissileShip extends PositionComponent
       damage: missileWaveDamage(wave), // Fixed at creation
       direction: direction,
     ));
-    game.audioManager.playSfx('enemy_shoot.wav');
+    game.audioManager.playSfx('missile_launch.wav');
   }
 
   // ── Aggressive mode (called after 60s wave timer) ────────────────────────────

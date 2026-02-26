@@ -46,6 +46,12 @@ class AudioManager {
     'explosion.wav',
     'button.wav',
     'player_hit.wav',
+    'warning_siren.wav',
+    'boss_entry.wav',
+    'missile_lock.wav',
+    'missile_launch.wav',
+    'boss_death.wav',
+    'miniboss_warning.wav',
   ];
 
   // ── Initialisation ──────────────────────────────────────────────────────────

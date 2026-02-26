@@ -19,6 +19,7 @@ class MissileLockReticle extends Component
 
   @override
   void update(double dt) {
+    if (_timer == 0) game.audioManager.playSfx('missile_lock.wav');
     super.update(dt);
     _timer += dt;
     _pulsePhase += dt * (pi * 2 / 0.4); // One full pulse per 0.4s
