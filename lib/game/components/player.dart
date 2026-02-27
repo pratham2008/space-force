@@ -62,9 +62,13 @@ class Player extends PositionComponent
 
   @override
   void onDragUpdate(DragUpdateEvent event) {
-    position.add(event.localDelta);
-    _dragX   = event.localDelta.x;
-    _dragLen = event.localDelta.length;
+    // Transform localDelta to parent space (game space) to fix the 'upward drift' caused by rotation.
+    final parentDelta = event.localDelta.clone()..rotate(angle);
+    position.add(parentDelta);
+    
+    // Use the transformed delta for visual effects (tilt and thrusters) to stay consistent with movement.
+    _dragX   += parentDelta.x;
+    _dragLen += parentDelta.length;
   }
 
   @override
