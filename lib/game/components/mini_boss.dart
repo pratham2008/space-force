@@ -346,21 +346,34 @@ class EnemyBulletMiniBoss extends PositionComponent
     }
   }
 
+  // ── Cached paints ─────────────────────────────────────────────────────────
+  static final Paint _outerGlow = Paint()
+    ..color = const Color(0xFFFF1744).withValues(alpha: 0.35)
+    ..blendMode = BlendMode.plus;
+  static final Paint _corePaint = Paint()..color = const Color(0xFFFF4444);
+  static final Paint _hotCenter = Paint()..color = Colors.white.withValues(alpha: 0.5);
+  static final Paint _trailPaint = Paint()
+    ..color = const Color(0xFFFF4444).withValues(alpha: 0.15)
+    ..blendMode = BlendMode.plus;
+
   @override
   void render(Canvas canvas) {
+    // Trailing glow strip
+    canvas.drawOval(
+      Rect.fromLTWH(-1, -6, _width + 2, _height + 12),
+      _trailPaint,
+    );
     canvas.drawOval(
       Rect.fromLTWH(-2, -2, _width + 4, _height + 4),
-      Paint()
-        ..color = const Color(0xFFFF1744).withValues(alpha: 0.35)
-        ..blendMode = BlendMode.plus,
+      _outerGlow,
     );
     canvas.drawOval(
       Rect.fromLTWH(0, 0, _width, _height),
-      Paint()..color = const Color(0xFFFF4444),
+      _corePaint,
     );
     canvas.drawOval(
       Rect.fromLTWH(1, 1, _width - 2, _height - 4),
-      Paint()..color = Colors.white.withValues(alpha: 0.5),
+      _hotCenter,
     );
   }
 }

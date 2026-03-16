@@ -514,24 +514,37 @@ class EnemyBullet extends PositionComponent
     }
   }
 
+  // ── Cached paints ─────────────────────────────────────────────────────────
+  static final Paint _outerGlow = Paint()
+    ..color = const Color(0xFFFF1744).withValues(alpha: 0.3)
+    ..blendMode = BlendMode.plus;
+  static final Paint _corePaint = Paint()..color = const Color(0xFFFF1744);
+  static final Paint _hotCenter = Paint()..color = Colors.white.withValues(alpha: 0.6);
+  static final Paint _trailPaint = Paint()
+    ..color = const Color(0xFFFF1744).withValues(alpha: 0.15)
+    ..blendMode = BlendMode.plus;
+
   @override
   void render(Canvas canvas) {
+    // Trailing glow strip (extends behind the bullet)
+    canvas.drawOval(
+      Rect.fromLTWH(-1, -6, size.x + 2, size.y + 12),
+      _trailPaint,
+    );
     // Outer glow
     canvas.drawOval(
       Rect.fromLTWH(-2, -2, size.x + 4, size.y + 4),
-      Paint()
-        ..color = const Color(0xFFFF1744).withValues(alpha: 0.3)
-        ..blendMode = BlendMode.plus,
+      _outerGlow,
     );
     // Core pill
     canvas.drawOval(
       Rect.fromLTWH(0, 0, size.x, size.y),
-      Paint()..color = const Color(0xFFFF1744),
+      _corePaint,
     );
     // Hot centre
     canvas.drawOval(
       Rect.fromLTWH(1, 1, size.x - 2, size.y - 4),
-      Paint()..color = Colors.white.withValues(alpha: 0.6),
+      _hotCenter,
     );
   }
 }

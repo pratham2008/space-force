@@ -12,6 +12,7 @@ import 'components/mini_boss.dart';
 import 'components/boss.dart';
 import 'components/boss_warning_sequence.dart';
 import 'components/elite_warning_banner.dart';
+import 'components/wormhole.dart';
 import 'package:flame/components.dart';
 import 'components/wave_transition.dart';
 import 'effects/warp_ring_component.dart';
@@ -176,6 +177,14 @@ class ZeroVectorGame extends FlameGame with HasCollisionDetection {
   /// Missile damage is given as a pre-computed value (fixed at projectile creation).
   void applyMissileDamageToPlayer(int damage) => _applyDamageToPlayer(damage);
 
+  /// Wormhole = instant death. Bypasses invulnerability.
+  void applyWormholeDeath() {
+    if (state == GameState.gameOver) return;
+    playerHp = 0;
+    lives = 0;
+    _triggerGameOver();
+  }
+
   void _applyDamageToPlayer(int amount) {
     if (state == GameState.gameOver) return;
     if (isInvulnerable) return;
@@ -298,6 +307,13 @@ class ZeroVectorGame extends FlameGame with HasCollisionDetection {
       }
     }
 
+    // ── Wormhole hazard roll (25% chance, max 1 on screen) ─────────────────
+    if (children.whereType<Wormhole>().isEmpty &&
+        _random.nextDouble() < 0.25) {
+      final x = 50 + _random.nextDouble() * (size.x - 100);
+      add(Wormhole(position: Vector2(x, -60)));
+    }
+
     _startNextWave();
   }
 
@@ -397,6 +413,7 @@ class ZeroVectorGame extends FlameGame with HasCollisionDetection {
     children.whereType<WarpRingComponent>().forEach((c) => c.removeFromParent());
     children.whereType<MiniBoss>().forEach((c) => c.removeFromParent());
     children.whereType<EliteWarningBanner>().forEach((c) => c.removeFromParent());
+    children.whereType<Wormhole>().forEach((c) => c.removeFromParent());
     player?.removeFromParent();
     _spawnManager?.removeFromParent();
 
@@ -416,6 +433,7 @@ class ZeroVectorGame extends FlameGame with HasCollisionDetection {
     children.whereType<Boss>().forEach((c) => c.removeFromParent());
     children.whereType<BossWarningSequence>().forEach((c) => c.removeFromParent());
     children.whereType<EliteWarningBanner>().forEach((c) => c.removeFromParent());
+    children.whereType<Wormhole>().forEach((c) => c.removeFromParent());
 
     _score = 0;
     isBossFight = false;
@@ -459,6 +477,7 @@ class ZeroVectorGame extends FlameGame with HasCollisionDetection {
     children.whereType<MissileShip>().forEach((e) => e.removeFromParent());
     children.whereType<MiniBoss>().forEach((e) => e.removeFromParent());
     children.whereType<Boss>().forEach((e) => e.removeFromParent());
+    children.whereType<Wormhole>().forEach((e) => e.removeFromParent());
   }
 
   Player? get player => children.whereType<Player>().firstOrNull;
