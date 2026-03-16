@@ -4,15 +4,27 @@ import 'package:flame/collisions.dart';
 import 'package:flutter/material.dart';
 import '../zero_vector_game.dart';
 import 'player.dart';
+import 'bullet.dart';
+import 'enemy.dart';
+import 'mini_boss.dart';
+import 'missile_ship.dart';
+import 'missile_projectile.dart';
 
-/// A deep-space wormhole hazard. Visually rendered as a dark gravitational
-/// vortex with dim blue-white accretion arms — space-realistic, no neon.
-/// Instant kill on contact with the player ship.
+/// A deep-space wormhole hazard with realistic gravitational pull.
+/// Attracts nearby objects (bullets, enemies, missiles) within its gravity
+/// radius. Instant kill on contact with the player ship.
 class Wormhole extends PositionComponent
     with HasGameReference<ZeroVectorGame>, CollisionCallbacks {
 
   static const double _driftSpeed = 35.0;
   static const double _radius = 42.0;
+
+  /// Objects within this radius get pulled toward the centre.
+  static const double _gravityRadius = 140.0;
+
+  /// Strength of the gravitational pull (pixels/s² at closest range).
+  static const double _gravityStrength = 280.0;
+
   double _rotationPhase = 0;
   double _pulsePhase = 0;
 
@@ -26,7 +38,7 @@ class Wormhole extends PositionComponent
   @override
   Future<void> onLoad() async {
     add(CircleHitbox(
-      radius: _radius * 0.65, // Slightly forgiving
+      radius: _radius * 0.65,
       position: Vector2.all(_radius * 0.35),
     ));
     _rotationPhase = Random().nextDouble() * 2 * pi;
@@ -41,6 +53,38 @@ class Wormhole extends PositionComponent
 
     if (position.y > game.size.y + _radius * 2) {
       removeFromParent();
+      return;
+    }
+
+    // ── Gravitational attraction ──────────────────────────────────────────────
+    _applyGravity<Bullet>(dt);
+    _applyGravity<EnemyBullet>(dt);
+    _applyGravity<EnemyBulletMiniBoss>(dt);
+    _applyGravity<MissileProjectile>(dt);
+    _applyGravity<Enemy>(dt);
+    _applyGravity<MissileShip>(dt);
+  }
+
+  /// Pulls all children of type [T] toward this wormhole's centre.
+  /// Force scales with inverse distance (stronger when closer).
+  /// Objects that reach the core are consumed (removed).
+  void _applyGravity<T extends PositionComponent>(double dt) {
+    for (final obj in game.children.whereType<T>()) {
+      final diff = position - obj.position;
+      final dist = diff.length;
+
+      if (dist < 1 || dist > _gravityRadius) continue;
+
+      // Consume objects that reach the core
+      if (dist < _radius * 0.3) {
+        obj.removeFromParent();
+        continue;
+      }
+
+      // Inverse-distance force: stronger as objects approach
+      final force = _gravityStrength * (1.0 - dist / _gravityRadius);
+      final direction = diff.normalized();
+      obj.position.addScaled(direction, force * dt);
     }
   }
 
@@ -87,11 +131,10 @@ class Wormhole extends PositionComponent
           path.lineTo(x, y);
         }
       }
-      // Inner arms are brighter, outer fade to dark
       final brightness = 0.2 + 0.25 * (1 - arm / 5) * pulse;
       _armPaint.color = Color.lerp(
-        const Color(0xFF1B2B4A), // deep space blue
-        const Color(0xFFB8C8E8), // pale starlight
+        const Color(0xFF1B2B4A),
+        const Color(0xFFB8C8E8),
         (arm / 5),
       )!.withValues(alpha: brightness);
       canvas.drawPath(path, _armPaint);
@@ -101,7 +144,7 @@ class Wormhole extends PositionComponent
     _ringPaint.color = const Color(0xFF7090B8).withValues(alpha: 0.25 * pulse);
     canvas.drawCircle(Offset(cx, cy), _radius * 0.28 * pulse, _ringPaint);
 
-    // 4. Gravitational lensing glow (very faint white-blue center)
+    // 4. Gravitational lensing glow
     canvas.drawCircle(
       Offset(cx, cy),
       _radius * 0.18,

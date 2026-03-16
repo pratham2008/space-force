@@ -3,8 +3,9 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../zero_vector_game.dart';
 
-/// 3-layer parallax starfield with color variety, twinkle, and faint nebula
-/// clouds. All Paint objects are cached — zero per-frame allocations.
+/// 3-layer parallax starfield with realistic star shapes (4-point sparkles),
+/// color variety, twinkle, and faint nebula clouds.
+/// Zero per-frame Paint allocation.
 class Starfield extends Component with HasGameReference<ZeroVectorGame> {
   static const int _count0 = 70;  // far, dim, slow
   static const int _count1 = 55;  // mid
@@ -14,15 +15,17 @@ class Starfield extends Component with HasGameReference<ZeroVectorGame> {
   final List<_Nebula> _nebulae = [];
   final Random _rng = Random();
 
-  // ── Cached paints (reused every frame) ──────────────────────────────────
-  static final Paint _white   = Paint()..color = Colors.white;
-  static final Paint _nebulaP = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 40);
+  // ── Cached paints ──────────────────────────────────────────────────────────
+  static final Paint _starPaint  = Paint()..style = PaintingStyle.fill;
+  static final Paint _glowPaint  = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5);
+  static final Paint _nebulaP    = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 40);
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
 
-    // Stars
     for (int i = 0; i < _count0; i++) {
       _stars.add(_makeStar(0));
     }
@@ -33,7 +36,6 @@ class Starfield extends Component with HasGameReference<ZeroVectorGame> {
       _stars.add(_makeStar(2));
     }
 
-    // Nebula clouds (3-4 large soft circles)
     for (int i = 0; i < 4; i++) {
       _nebulae.add(_Nebula(
         x: _rng.nextDouble() * game.size.x,
@@ -62,27 +64,27 @@ class Starfield extends Component with HasGameReference<ZeroVectorGame> {
     switch (layer) {
       case 0:
         speedBase = 10 + _rng.nextDouble() * 15;
-        size = 0.4 + _rng.nextDouble() * 0.4;
+        size = 0.5 + _rng.nextDouble() * 0.3;
         opacity = 0.15 + _rng.nextDouble() * 0.25;
         break;
       case 1:
         speedBase = 28 + _rng.nextDouble() * 30;
-        size = 0.7 + _rng.nextDouble() * 0.6;
+        size = 0.7 + _rng.nextDouble() * 0.5;
         opacity = 0.35 + _rng.nextDouble() * 0.35;
         break;
       default:
         speedBase = 65 + _rng.nextDouble() * 80;
-        size = 1.2 + _rng.nextDouble() * 1.0;
+        size = 1.0 + _rng.nextDouble() * 0.8;
         opacity = 0.65 + _rng.nextDouble() * 0.35;
         break;
     }
 
-    // Color variety: ~20% faint blue, ~10% warm amber, rest white
+    // Color variety: ~20% cool blue, ~10% warm amber
     final roll = _rng.nextDouble();
     if (roll < 0.20) {
-      tint = const Color(0xFFB8D4FF); // cool starlight blue
+      tint = const Color(0xFFB8D4FF);
     } else if (roll < 0.30) {
-      tint = const Color(0xFFFFD9A0); // warm amber
+      tint = const Color(0xFFFFD9A0);
     }
 
     return _Star(
@@ -94,6 +96,7 @@ class Starfield extends Component with HasGameReference<ZeroVectorGame> {
       layer: layer,
       tint: tint,
       twinklePhase: _rng.nextDouble() * 2 * pi,
+      rotationAngle: _rng.nextDouble() * pi / 4, // slight random rotation
     );
   }
 
@@ -103,17 +106,17 @@ class Starfield extends Component with HasGameReference<ZeroVectorGame> {
 
     final speedMult = game.state == GameState.menu ? 1.5 : 1.0;
 
-    // Stars
     for (final s in _stars) {
       s.y += s.speed * speedMult * dt;
-      if (s.layer == 2) s.twinklePhase += 3.0 * dt; // only bright stars twinkle
+      if (s.layer == 2) {
+        s.twinklePhase += 3.0 * dt;
+      }
       if (s.y > game.size.y + 2) {
         s.y = -2;
         s.x = _rng.nextDouble() * game.size.x;
       }
     }
 
-    // Nebulae (very slow parallax)
     for (final n in _nebulae) {
       n.y += n.speed * speedMult * dt;
       if (n.y > game.size.y + n.radius) {
@@ -127,22 +130,68 @@ class Starfield extends Component with HasGameReference<ZeroVectorGame> {
   void render(Canvas canvas) {
     super.render(canvas);
 
-    // Nebula clouds first (behind stars)
+    // Nebula clouds (behind stars)
     for (final n in _nebulae) {
       _nebulaP.color = n.color.withValues(alpha: 0.12);
       canvas.drawCircle(Offset(n.x, n.y), n.radius, _nebulaP);
     }
 
-    // Stars
+    // Stars — rendered as 4-point sparkles
     for (final s in _stars) {
       double alpha = s.baseOpacity;
       if (s.layer == 2) {
-        // Twinkle: subtle brightness oscillation
         alpha *= (0.7 + 0.3 * sin(s.twinklePhase));
       }
-      _white.color = s.tint.withValues(alpha: alpha.clamp(0.0, 1.0));
-      canvas.drawCircle(Offset(s.x, s.y), s.size, _white);
+
+      final color = s.tint.withValues(alpha: alpha.clamp(0.0, 1.0));
+
+      if (s.layer == 0) {
+        // Far layer: tiny dot (too small to see shape)
+        _starPaint.color = color;
+        canvas.drawCircle(Offset(s.x, s.y), s.size * 0.6, _starPaint);
+      } else {
+        // Mid/Near layers: 4-point sparkle cross
+        _drawSparkle(canvas, s.x, s.y, s.size, s.rotationAngle, color, s.layer == 2);
+      }
     }
+  }
+
+  /// Draws a 4-point sparkle (cross shape with pointed tips).
+  /// Optionally adds a soft glow behind it for bright (layer 2) stars.
+  void _drawSparkle(Canvas canvas, double x, double y, double r,
+      double rotation, Color color, bool addGlow) {
+    // Spike lengths: vertical spikes are longer than horizontal
+    final longR  = r * 2.8;  // vertical spike length
+    final shortR = r * 1.4;  // horizontal spike length
+    final midW   = r * 0.35; // half-width at the spike's waist
+
+    if (addGlow) {
+      _glowPaint.color = color.withValues(alpha: (color.a * 0.3).clamp(0.0, 1.0));
+      canvas.drawCircle(Offset(x, y), r * 1.8, _glowPaint);
+    }
+
+    canvas.save();
+    canvas.translate(x, y);
+    canvas.rotate(rotation);
+
+    final path = Path()
+      // Top spike
+      ..moveTo(0, -longR)
+      ..lineTo(midW, 0)
+      // Right spike
+      ..lineTo(shortR, 0)
+      ..lineTo(0, midW)
+      // Bottom spike
+      ..lineTo(0, longR)
+      ..lineTo(-midW, 0)
+      // Left spike
+      ..lineTo(-shortR, 0)
+      ..lineTo(0, -midW)
+      ..close();
+
+    _starPaint.color = color;
+    canvas.drawPath(path, _starPaint);
+    canvas.restore();
   }
 }
 
@@ -156,12 +205,14 @@ class _Star {
   final int layer;
   final Color tint;
   double twinklePhase;
+  final double rotationAngle;
 
   _Star({
     required this.x, required this.y,
     required this.speed, required this.size,
     required this.baseOpacity, required this.layer,
     required this.tint, required this.twinklePhase,
+    required this.rotationAngle,
   });
 }
 
