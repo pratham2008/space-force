@@ -103,7 +103,7 @@ class EnemySpawnManager extends Component
         position: spawnPos,
         wave: w,
         hp: 3 + (w * 0.5).floor(),
-        baseSpeed: (80 + w * 5.0).clamp(80, 150).toDouble(),
+        baseSpeed: (110 + w * 8.0).clamp(110, 200).toDouble(),
         hoverYFraction: 0.30,
       ));
       return;
@@ -169,7 +169,7 @@ class EnemySpawnManager extends Component
   }
 
   double _calculateEnemySpeed() {
-    return (100 + game.wave * 10.0).clamp(100, 280).toDouble();
+    return (130 + game.wave * 15.0).clamp(130, 340).toDouble();
   }
 
   /// Hover Y ceiling as fraction of screen height.

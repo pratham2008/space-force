@@ -205,19 +205,19 @@ class Enemy extends PositionComponent
 
   double _calculateInterceptorInterval() {
     final w = game.wave;
-    double base = 1.8;
-    if (w > 2) base = 1.4;
-    if (w > 5) base = 1.0;
-    if (w > 10) base = 0.7;
-    return base + _random.nextDouble() * 0.5;
+    double base = 1.3;
+    if (w > 2) base = 1.0;
+    if (w > 5) base = 0.7;
+    if (w > 10) base = 0.5;
+    return base + _random.nextDouble() * 0.3;
   }
 
   /// Burst cooldown scales by wave tier as per spec.
   double _calculateBurstCooldown() {
     final w = game.wave;
-    if (w >= 15) return 0.5 + _random.nextDouble() * 0.15;
-    if (w >= 10) return 0.8 + _random.nextDouble() * 0.2;
-    return 1.2 + _random.nextDouble() * 0.3; // Wave 7–9
+    if (w >= 15) return 0.35 + _random.nextDouble() * 0.10;
+    if (w >= 10) return 0.55 + _random.nextDouble() * 0.15;
+    return 0.85 + _random.nextDouble() * 0.2; // Wave 7–9
   }
 
   void _fireSingle({required double velocityX}) {

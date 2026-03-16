@@ -283,7 +283,7 @@ class ZeroVectorGame extends FlameGame with HasCollisionDetection {
                           children.whereType<Boss>().isNotEmpty;
 
     if (!isBossFight && !hasActiveBoss && wave >= 8) {
-      const miniBossChance = 0.15;
+      const miniBossChance = 0.30;
       if (_random.nextDouble() < miniBossChance) {
         add(EliteWarningBanner(
           onComplete: () {

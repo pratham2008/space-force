@@ -19,7 +19,7 @@ class MiniBoss extends PositionComponent
   int hp;
 
   // ── Movement ────────────────────────────────────────────────────────────────
-  static const double _entrySpeed  = 80.0;
+  static const double _entrySpeed  = 110.0;
   static const double _oscillationAmplitude = 40.0;
   double _hoverTargetY = 0;
   bool _hovering = false;
@@ -31,8 +31,8 @@ class MiniBoss extends PositionComponent
   bool _missileReticleActive = false;
   final Random _random = Random();
 
-  double get _gunInterval   => (1.8 - wave * 0.04).clamp(0.4, 1.8);
-  double get _missileInterval => (6.0 - wave * 0.1).clamp(2.5, 6.0);
+  double get _gunInterval   => (1.3 - wave * 0.05).clamp(0.3, 1.3);
+  double get _missileInterval => (4.5 - wave * 0.15).clamp(1.8, 4.5);
 
   MiniBoss({required this.wave, required this.hp, required Vector2 position})
       : super(
